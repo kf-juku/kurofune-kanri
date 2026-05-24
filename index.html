@@ -61,7 +61,6 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
 .tab-panel { display: none; }
 .tab-panel.active { display: block; }
 #tabPanelBulk.active { display: flex !important; flex-direction: column; height: 100vh; overflow: hidden; }
-#tabPanelBulk.active { display: flex; flex-direction: column; height: calc(100vh - 0px); overflow: hidden; }
 .tab-header { background: white; color: var(--text); padding: 10px 20px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; border-bottom: 1px solid #e8ecf0; flex-wrap: wrap; gap: 6px; }
 .tab-header-title { font-size: 14px; font-weight: 800; letter-spacing: 0.02em; color: var(--text); }
 
@@ -2030,7 +2029,7 @@ function switchTab(tab){
     var s=document.getElementById('sideNav'+cap(t));
     var b=document.getElementById('bn'+cap(t));
     if(p){
-      if(t===tab){ p.style.display=(t==='bulk'?'':'block'); p.classList.add('active'); }
+      if(t===tab){ p.style.display=(t==='bulk'?'flex':'block'); p.classList.add('active'); }
       else { p.style.display='none'; p.classList.remove('active'); }
     }
     if(s) s.classList.toggle('active',t===tab);
@@ -2143,7 +2142,7 @@ function renderList(){
       if(da) return -1; if(db) return 1;
       return (a.name||'').localeCompare(b.name||'');
     } else if(sortKey==='enroll_asc'){
-      var da=a.jukuEnroll||a.caEnroll||''; var db=b.jukuEnroll||b.caEnroll||'';
+      da=a.jukuEnroll||a.caEnroll||''; db=b.jukuEnroll||b.caEnroll||'';
       if(da&&db) return da.localeCompare(db);
       if(da) return -1; if(db) return 1;
       return (a.name||'').localeCompare(b.name||'');
@@ -2525,7 +2524,7 @@ function renderScoreInput(){
           +'<div class="si-spinner-wrap">'
           +'<button class="si-spin-btn" tabindex="-1" onclick="siSpin(\''+cid+'\',1,0,100)">▲</button>'
           +'<input class="score-input-bulk" type="text" inputmode="numeric" id="'+cid+'" value="'+val+'" placeholder="—" maxlength="3" oninput="this.value=toHankaku(this.value)" onkeydown="siKeyNav(event,this)">'
-          +'<button class="si-spin-btn" tabindex="-1" onclick="siSpin(\''+cid+'\',- 1,0,100)">▼</button>'
+          +'<button class="si-spin-btn" tabindex="-1" onclick="siSpin(\''+cid+'\',-1,0,100)">▼</button>'
           +'</div></td>';
       });
       html += '</tr>';
@@ -3237,7 +3236,7 @@ function buildDetailTaskRow(idx){
 
 function onDetailTaskInput(idx){
   var val = (document.getElementById('dttask_'+idx).value||'').trim();
-  var container = document.getElementById('dttaskrows');
+  var container = document.getElementById('dttaskrows_iv');
   if(!container) return;
   if(val && !document.getElementById('dttaskrow_'+(idx+1)) && idx < 4){
     container.insertAdjacentHTML('beforeend', buildDetailTaskRow(idx+1));
@@ -4065,6 +4064,7 @@ function deleteMemoTask(memberId, taskId){
 }
 
 // ===== 会員追加モーダル =====
+/* OBSOLETE: addYoubi要素は廃止済み。コマチェックボックス方式に変更されたため未使用 */
 function updateAddYoubi(){
   var attrJuku = document.getElementById('addAttrJuku') ? document.getElementById('addAttrJuku').checked : false;
   var attrCa   = document.getElementById('addAttrCa')   ? document.getElementById('addAttrCa').checked   : false;
@@ -4572,7 +4572,7 @@ function renderKomaTable(m){
   var caWrap   = document.getElementById('komaCaWrap');
   if(!jukuWrap) return;
   var komas = m.komas || [];
-  var attrJuku = m.attrJuku || document.getElementById('dAttrJuku') && document.getElementById('dAttrJuku').checked;
+  var attrJuku = !!(m.attrJuku || (document.getElementById('dAttrJuku') && document.getElementById('dAttrJuku').checked));
   var attrCa   = m.attrCa   || document.getElementById('dAttrCa')   && document.getElementById('dAttrCa').checked;
   // 塾セクション
   var jukuHtml = '<div class="koma-course-header' + (!attrJuku?' koma-course-header-disabled':'') + '">🏫 進学塾コマ</div>';
@@ -6358,7 +6358,7 @@ function updateIqStatusBadge(id){
 
   var s3done    = document.getElementById('iqe_s3done_'+id) && document.getElementById('iqe_s3done_'+id).checked;
   var s3dec     = document.getElementById('iqe_s3dec_'+id)  && document.getElementById('iqe_s3dec_'+id).checked;
-  var s1done    = document.getElementById('iqe_s1done_'+id) && document.getElementById('iqe_s1done_'+id).checked;
+  var s1done    = document.getElementById('iqe_s1done_'+id) && (document.getElementById('iqe_s1done_'+id) && document.getElementById('iqe_s1done_'+id).checked);
   var rdone     = document.getElementById('iqe_rdone_'+id)  && document.getElementById('iqe_rdone_'+id).checked;
   // 体験チェック: trials container内のチェックボックスを確認
   var trialsContainer = document.getElementById('iqtrials_'+id);
@@ -6992,7 +6992,7 @@ function fireIqTaskTrigger(trigger, apoDtStr, apoTimeStr, classroom, studentName
     if(alreadyExists){ return; /* 重複スキップ */ }
 
     // ② 会員管理タスク一覧に追加（生徒名で照合、未紐付けはiqTasksへ）
-    var matched = studentName ? _members.filter(function(m){ return m.name === studentName; }) : [];
+    var matched = studentName ? (_members||[]).filter(function(m){ return m.name === studentName; }) : [];
     if(matched.length > 0){
       // 紐付け済み: memosに追加
       var m = matched[0];
@@ -7219,7 +7219,7 @@ function saveIqCard(id, skipRender){
   if(!iq) return;
   var s1timeEl = document.getElementById('iqe_s1time_'+id);
   var steps = {
-    visit:  { done: document.getElementById('iqe_s1done_'+id).checked, date: document.getElementById('iqe_s1date_'+id).value, time: s1timeEl ? s1timeEl.value : '' },
+    visit:  { done: (document.getElementById('iqe_s1done_'+id) && document.getElementById('iqe_s1done_'+id).checked), date: document.getElementById('iqe_s1date_'+id).value, time: s1timeEl ? s1timeEl.value : '' },
     enroll: {
       done:     !!(document.getElementById('iqe_s3done_'+id) && document.getElementById('iqe_s3done_'+id).checked),
       date:     '',
@@ -8177,7 +8177,7 @@ function tmplCollectAll(){
       if(item.dueTimeType === 'none') {
         item.dueTime = '';
       } else if(item.dueTimeType === 'fix') {
-        item.dueTime = item.dueTime || 'apo';
+        if(!item.dueTime){ console.warn('[tmplCollectAll] 時刻指定が未入力のためapoにフォールバックしました'); } item.dueTime = item.dueTime || 'apo';
       } else {
         item.dueTime = 'apo';
       }
@@ -8211,7 +8211,7 @@ function tmplDeleteRow(trigger, idx){
     var delBtn = row.querySelector('button[onclick*="tmplDeleteRow"]');
     if(delBtn) delBtn.setAttribute('onclick', 'tmplDeleteRow(\''+trigger+'\','+i+')');
     // ID付き要素のIDも更新
-    ['tmplOffsetNum','tmplOffsetDay','tmplMonthDay'].forEach(function(prefix){
+    ['tmplOffsetNum','tmplOffsetDay','tmplMonthDay','tmplLeaveDay','tmplDueTime'].forEach(function(prefix){
       var el = row.querySelector('[id^="'+prefix+'_'+trigger+'_"]');
       if(el) el.id = prefix+'_'+trigger+'_'+i;
     });
