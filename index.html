@@ -326,6 +326,14 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
 .koma-course-header-disabled { border-left-color: var(--border); color: var(--text-light); }
 .koma-section-label { font-size: 11px; font-weight: 700; color: var(--text-muted); margin: 6px 0 2px; }
 .koma-section-label.koma-section-disabled { color: var(--text-light); opacity: 0.5; }
+/* ===== 受講ルールアラートバナー ===== */
+#komaAlertBanner { display:none; background:#fff8f0; border:1.5px solid #f97316; border-radius:8px; margin:8px 12px 0; padding:8px 12px; }
+#komaAlertBanner.has-alert { display:block; }
+.koma-alert-title { font-size:12px; font-weight:700; color:#c2410c; margin-bottom:6px; display:flex; align-items:center; gap:6px; }
+.koma-alert-list { display:flex; flex-wrap:wrap; gap:6px; }
+.koma-alert-chip { display:inline-flex; align-items:center; gap:4px; padding:3px 10px; border-radius:20px; background:white; border:1.5px solid #f97316; font-size:11.5px; font-weight:600; color:#c2410c; cursor:pointer; transition:background 0.1s; }
+.koma-alert-chip:hover { background:#fff0e5; }
+.koma-alert-reason { font-size:10px; font-weight:400; color:#9a3412; margin-left:2px; }
 .koma-table-disabled { opacity: 0.35; pointer-events: none; }
 
 /* ===== 設定 ===== */
@@ -745,6 +753,10 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
             生徒エクスポート
           </button>
         </div>
+      </div>
+      <div id="komaAlertBanner">
+        <div class="koma-alert-title">⚠️ 受講設定が不足している生徒がいます（クリックで詳細へ）</div>
+        <div class="koma-alert-list" id="komaAlertList"></div>
       </div>
       <div class="filter-bar">
         <div class="filter-row">
@@ -1250,7 +1262,7 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
       <div class="detail-head-sub" id="detailHeadSub"></div>
     </div>
     <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
-      <button id="leaveFlowBtn" onclick="openLeaveModal()" style="font-size:11px;padding:3px 10px;border-radius:5px;border:1.5px solid #fca5a5;background:#fff5f5;color:#dc2626;cursor:pointer;font-family:inherit;font-weight:600;white-space:nowrap;">🚪 退会手続き</button>
+      <button id="leaveFlowBtn" onclick="openLeaveModal()" style="font-size:11px;padding:3px 10px;border-radius:5px;border:1.5px solid #cbd5e1;background:#f8fafc;color:#64748b;cursor:pointer;font-family:inherit;font-weight:600;white-space:nowrap;">🚪 退会手続き</button>
       <button class="detail-close" onclick="closeDetailGuarded()">×</button>
     </div>
   </div>
@@ -2217,6 +2229,7 @@ function renderList(){
       +'<button class="btn-danger" onclick="event.stopPropagation();openDeleteModal('+ri+')">🗑</button>'
       +'</div></div>';
   }).join('');
+  updateKomaAlertBanner();
 }
 
 function updateClassroomFilter(){
@@ -2319,11 +2332,11 @@ function openDetail(idx){
   document.getElementById('dParent').value=m.parent||'';
   document.getElementById('dPhone').value=m.phone||'';
   document.getElementById('dEmail').value=m.email||'';
-  // 受講コマ
-  renderKomaTable(m);
-  // コース
+  // コース（renderKomaTableより先に設定が必要）
   document.getElementById('dAttrJuku').checked=!!m.attrJuku;
   document.getElementById('dAttrCa').checked=!!m.attrCa;
+  // 受講コマ
+  renderKomaTable(m);
   document.getElementById('dJukuEnroll').value=m.jukuEnroll||'';
   document.getElementById('dJukuLeave').value=m.jukuLeave||'';
   document.getElementById('dCaEnroll').value=m.caEnroll||'';
@@ -2414,6 +2427,87 @@ function toggleAttrDates(type){
   var el=document.getElementById(type==='juku'?'attrDatesJuku':'attrDatesCa');
   if(el) el.classList.toggle('disabled',!checked);
   refreshKomaTableDisabled();
+}
+
+// ===== 受講ルールバリデーション =====
+// 戻り値: [{id, name, grade, reasons:[string]}]
+function checkKomaRules(members){
+  var alerts = [];
+  (members||[]).forEach(function(m){
+    if(m.status === '退会') return;
+    var reasons = [];
+    var komas = m.komas || [];
+    var grade = m.grade || '';
+    var isJuku = !!m.attrJuku;
+    var isCa   = !!m.attrCa;
+    var isChugaku = grade.indexOf('中') === 0;
+    var isKoko    = grade.indexOf('高') === 0;
+
+    if(isJuku){
+      var weekdayJuku = komas.filter(function(k){
+        return !k.satType && !(k.id && k.id.indexOf('ca_')===0) && !k.online;
+      });
+      if(weekdayJuku.length < 2){
+        reasons.push('平日塾コマが' + weekdayJuku.length + 'コマ（2コマ必要）');
+      }
+      if(isChugaku){
+        var hasSat = komas.some(function(k){
+          if(k.satType === 'sat') return true;
+          if(k.satType === 'hira') return !!(k.hiraKoma && k.hiraKoma.trim());
+          return false;
+        });
+        if(!hasSat){
+          reasons.push('土曜演習①②または平日振替が未設定');
+        }
+      }
+      var onlineKomas = komas.filter(function(k){ return k.online; });
+      if(isChugaku && onlineKomas.length > 0){
+        var weekdayOnline = komas.filter(function(k){
+          return k.online && !k.satType && !(k.id && k.id.indexOf('ca_')===0);
+        });
+        if(weekdayOnline.length < 2){
+          reasons.push('平日オンラインコマが' + weekdayOnline.length + 'コマ（2コマ必要）');
+        }
+      }
+    }
+
+    if(isCa){
+      var caKomas = komas.filter(function(k){ return k.id && k.id.indexOf('ca_')===0; });
+      if(caKomas.length < 1){
+        reasons.push('CAコマが未設定');
+      }
+    }
+
+    var hasEiken = komas.some(function(k){ return k.satType === 'eiken'; });
+    if(hasEiken && isKoko){
+      reasons.push('英検対策は小中学生対象（高校生に設定されています）');
+    }
+
+    if(reasons.length > 0){
+      alerts.push({id: m.id, name: m.name || '（名前未設定）', grade: grade, reasons: reasons});
+    }
+  });
+  return alerts;
+}
+
+function updateKomaAlertBanner(){
+  var banner = document.getElementById('komaAlertBanner');
+  var list   = document.getElementById('komaAlertList');
+  if(!banner || !list) return;
+  var alerts = checkKomaRules(_members||[]);
+  if(alerts.length === 0){
+    banner.classList.remove('has-alert');
+    list.innerHTML = '';
+    return;
+  }
+  banner.classList.add('has-alert');
+  list.innerHTML = alerts.map(function(a){
+    var idx = (_members||[]).findIndex(function(m){ return m.id === a.id; });
+    return '<span class="koma-alert-chip" onclick="openDetail('+idx+')">'
+      + esc(a.name) + (a.grade ? '（'+esc(a.grade)+'）' : '')
+      + '<span class="koma-alert-reason">' + esc(a.reasons.join(' / ')) + '</span>'
+      + '</span>';
+  }).join('');
 }
 
 // ===== 詳細保存 =====
@@ -4522,6 +4616,7 @@ var SAT_KOMA_DEF = [
   {id:'sat_eiken', youbi:'土', time:'16:20〜17:10', satType:'eiken', label:'英検対策'},
   {id:'sat_sat1',  youbi:'土', time:'17:15〜18:35', satType:'sat',   label:'土曜演習①'},
   {id:'sat_sat2',  youbi:'土', time:'18:40〜20:00', satType:'sat',   label:'土曜演習②'},
+  {id:'sat_hira',  youbi:'',  time:'',              satType:'hira',  label:'平日振替'},
   {id:'sat_juken', youbi:'土', time:'19:00〜20:30', satType:'juken', label:'受験特訓'},
 ];
 
@@ -4573,7 +4668,7 @@ function renderKomaTable(m){
   if(!jukuWrap) return;
   var komas = m.komas || [];
   var attrJuku = !!(m.attrJuku || (document.getElementById('dAttrJuku') && document.getElementById('dAttrJuku').checked));
-  var attrCa   = m.attrCa   || document.getElementById('dAttrCa')   && document.getElementById('dAttrCa').checked;
+  var attrCa   = !!(m.attrCa   || (document.getElementById('dAttrCa')   && document.getElementById('dAttrCa').checked));
   // 塾セクション
   var jukuHtml = '<div class="koma-course-header' + (!attrJuku?' koma-course-header-disabled':'') + '">🏫 進学塾コマ</div>';
   jukuHtml += buildKomaTableHtml(KOMA_DEF, komas, !attrJuku);
@@ -4585,7 +4680,7 @@ function renderKomaTable(m){
     caWrap.innerHTML = caHtml;
   }
   // 土曜授業UI（komasからsatTypeを持つものを抽出して描画）
-  renderSatKomaUI(komas);
+  renderSatKomaUI(komas, m.classroom || '');
 }
 
 function refreshKomaTableDisabled(){
@@ -4638,25 +4733,92 @@ function getKomasFromUI(){
 }
 
 // 土曜コマUIを描画（チェックボックス）
-function renderSatKomaUI(komas){
+// satType:'hira'（平日振替）のときはチェック後にコマ選択プルダウンを表示する
+function renderSatKomaUI(komas, classroom){
   var wrap = document.getElementById('komaOptSatWrap');
   if(!wrap) return;
   wrap.innerHTML = '';
-  SAT_KOMA_DEF.forEach(function(def){
-    var checked = (komas||[]).some(function(k){ return k.id === def.id; });
+
+  // --- 英検対策 ---
+  var eikenDef = SAT_KOMA_DEF.find(function(d){ return d.satType === 'eiken'; });
+  if(eikenDef){
+    var ex = (komas||[]).find(function(k){ return k.id === eikenDef.id; });
+    var cbId = 'satKoma_' + eikenDef.id;
+    var cb = document.createElement('input');
+    cb.type='checkbox'; cb.id=cbId; cb.className='koma-opt-cb'; cb.checked=!!ex;
+    var lbl = document.createElement('label');
+    lbl.htmlFor=cbId; lbl.className='koma-opt-label';
+    lbl.textContent = eikenDef.label + ' ' + eikenDef.time;
+    wrap.appendChild(cb); wrap.appendChild(lbl);
+  }
+
+  // --- 土曜演習グループ（①②・平日振替から1つ選択） ---
+  var grpDiv = document.createElement('div');
+  grpDiv.style.cssText = 'margin-top:8px;border:1.5px solid #cbd5e1;border-radius:8px;padding:8px 10px;background:#f8fafc;';
+  var grpLabel = document.createElement('div');
+  grpLabel.style.cssText = 'font-size:10px;font-weight:700;color:#64748b;margin-bottom:6px;';
+  grpLabel.textContent = '🗓️ 土曜演習（①②・平日振替のいずれか1つ）';
+  grpDiv.appendChild(grpLabel);
+  var grpItems = document.createElement('div');
+  grpItems.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;align-items:center;';
+
+  var satDefs = SAT_KOMA_DEF.filter(function(d){ return d.satType === 'sat' || d.satType === 'hira'; });
+  satDefs.forEach(function(def){
+    var existing = (komas||[]).find(function(k){ return k.id === def.id; });
+    var checked = !!existing;
     var cbId = 'satKoma_' + def.id;
     var cb = document.createElement('input');
-    cb.type = 'checkbox';
-    cb.id = cbId;
-    cb.className = 'koma-opt-cb';
-    cb.checked = checked;
+    cb.type='checkbox'; cb.id=cbId; cb.className='koma-opt-cb'; cb.checked=checked;
     var lbl = document.createElement('label');
-    lbl.htmlFor = cbId;
-    lbl.className = 'koma-opt-label';
-    lbl.textContent = def.label + ' ' + def.time;
-    wrap.appendChild(cb);
-    wrap.appendChild(lbl);
+    lbl.htmlFor=cbId; lbl.className='koma-opt-label';
+    lbl.textContent = def.label + (def.time ? ' '+def.time : '');
+    grpItems.appendChild(cb); grpItems.appendChild(lbl);
+
+    // 平日振替：チェック時にコマ選択プルダウンを表示（所属教室で絞り込み）
+    if(def.satType === 'hira'){
+      var sel = document.createElement('select');
+      sel.id = 'satHiraKoma';
+      sel.style.cssText = 'display:'+(checked?'inline-flex':'none')+';font-size:11px;padding:3px 6px;border:1.5px solid var(--crimson);border-radius:6px;color:var(--crimson-dark);background:white;';
+      var hiraVal = existing ? (existing.hiraKoma || '') : '';
+      var hiraOpt = '<option value="">曜日・時刻を選択</option>';
+      // 所属教室でKOMA_DEFを絞り込む
+      var clsDefs = classroom ? (KOMA_DEF[classroom]||[]) : [];
+      if(!clsDefs.length){
+        // 教室未設定なら全コマ表示
+        ['北久里浜','久里浜'].forEach(function(c){ clsDefs = clsDefs.concat(KOMA_DEF[c]||[]); });
+      }
+      clsDefs.forEach(function(kd){
+        if(['月','火','水','木','金'].indexOf(kd.youbi) !== -1){
+          var val = kd.youbi + kd.time;
+          hiraOpt += '<option value="'+val+'"'+(hiraVal===val?' selected':'')+'>'+kd.youbi+'曜 '+kd.time+'</option>';
+        }
+      });
+      sel.innerHTML = hiraOpt;
+      cb.addEventListener('change', function(){
+        sel.style.display = cb.checked ? 'inline-flex' : 'none';
+        if(!cb.checked) sel.value = '';
+      });
+      grpItems.appendChild(sel);
+    }
   });
+  grpDiv.appendChild(grpItems);
+  wrap.appendChild(grpDiv);
+
+  // --- 受験特訓 ---
+  var jukenDef = SAT_KOMA_DEF.find(function(d){ return d.satType === 'juken'; });
+  if(jukenDef){
+    var ex2 = (komas||[]).find(function(k){ return k.id === jukenDef.id; });
+    var cbId2 = 'satKoma_' + jukenDef.id;
+    var cb2 = document.createElement('input');
+    cb2.type='checkbox'; cb2.id=cbId2; cb2.className='koma-opt-cb'; cb2.checked=!!ex2;
+    var lbl2 = document.createElement('label');
+    lbl2.htmlFor=cbId2; lbl2.className='koma-opt-label';
+    lbl2.textContent = jukenDef.label + ' ' + jukenDef.time;
+    var jDiv = document.createElement('div');
+    jDiv.style.cssText='margin-top:8px;';
+    jDiv.appendChild(cb2); jDiv.appendChild(lbl2);
+    wrap.appendChild(jDiv);
+  }
 }
 
 // 土曜コマのUI状態をkomasエントリとして取得
@@ -4665,7 +4827,13 @@ function getSatKomasFromUI(){
     var el = document.getElementById('satKoma_' + def.id);
     return el && el.checked;
   }).map(function(def){
-    return {id: def.id, youbi: def.youbi, time: def.time, satType: def.satType};
+    var entry = {id: def.id, youbi: def.youbi, time: def.time, satType: def.satType};
+    // 平日振替：選択したコマ情報を付加
+    if(def.satType === 'hira'){
+      var sel = document.getElementById('satHiraKoma');
+      entry.hiraKoma = sel ? sel.value : '';
+    }
+    return entry;
   });
 }
 
@@ -5346,7 +5514,7 @@ function onBulkTaskInput(mid, idx){
 // ===== 面談記録モード（授業メモ機能は削除済み） =====
 var _bulkMode = 'interview';
 function setBulkMode(mode){
-  _bulkMode = 'interview';
+  _bulkMode = mode || 'interview';
   renderBulkCards();
 }
 
@@ -5647,7 +5815,11 @@ function saveIqTasks(){
     fd.append('iqTasks', JSON.stringify(_iqTasks || []));
     window._iqSaving = true;
     fetch(url, {method:'POST', body:fd})
-      .then(function(){ window._lastGasSync = Date.now(); window._iqSaving = false; })
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        window._lastGasSync = Date.now(); window._iqSaving = false;
+        if(!data || !data.success) console.warn('[GAS] IQ保存応答エラー:', data);
+      })
       .catch(function(e){ window._iqSaving = false; console.warn('[GAS] IQ保存失敗:', e); });
   }
 }
@@ -5838,7 +6010,7 @@ function buildIqCard(iq){
       +(idx>0 ? '<div style="display:flex;justify-content:flex-end;"><button type="button" onclick="removeIqTrialBlock(\''+id+'\','+idx+')" style="background:none;border:none;color:#d1d5db;cursor:pointer;font-size:16px;line-height:1;padding:0 2px;" title="削除">×</button></div>' : '')
       +'<div style="display:flex;gap:4px;margin-bottom:4px;">'
       +'<input type="date" class="iq-step-date" id="iqe_tdate_'+id+'_'+idx+'" value="'+esc(t.date||'')+'" onchange="onIqTrialDateChange(\''+id+'\','+idx+');saveIqCardAuto(this)" style="flex:1;min-width:0;">'
-      +(buildKomaSelect('iqe_tkoma_'+id+'_'+idx, (t.koma||t.time||''),(function(){var iq2=_inquiries.find(function(x){return x.id===id;});return iq2?iq2.classroom:'';})(), 'flex:1;min-width:0;font-size:12px;', dateToYoubi(t.date||'')))
+      +(buildKomaSelect('iqe_tkoma_'+id+'_'+idx, (t.koma||t.time||''),(iq.classroom||''), 'flex:1;min-width:0;font-size:12px;', dateToYoubi(t.date||'')))
       +'<input type="hidden" id="iqe_ttime_'+id+'_'+idx+'" value="'+esc(t.time||'')+'">'
       +'</div>'
       +'<div class="iq-subject-btns">'+subBtns+'</div>'
@@ -6222,9 +6394,20 @@ function updateDetailHeader(){
   // 教室バッジ
   if(m.classroom) badges += '<span class="badge" style="background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;">'+esc(m.classroom)+'</span>';
   document.getElementById('detailHeadBadges').innerHTML = badges;
-  // 退会手続きボタン：退会済みなら非表示
+  // 退会手続きボタン：退会済みなら非表示、退会予定ありなら赤・通常はグレー
   var btn = document.getElementById('leaveFlowBtn');
-  if(btn) btn.style.display = m.status === '退会' ? 'none' : '';
+  if(btn){
+    btn.style.display = m.status === '退会' ? 'none' : '';
+    if(isLeavePending){
+      btn.style.border = '1.5px solid #fca5a5';
+      btn.style.background = '#fff5f5';
+      btn.style.color = '#dc2626';
+    } else {
+      btn.style.border = '1.5px solid #cbd5e1';
+      btn.style.background = '#f8fafc';
+      btn.style.color = '#64748b';
+    }
+  }
 }
 
 // ===== 退会手続きモーダル =====
@@ -6358,7 +6541,7 @@ function updateIqStatusBadge(id){
 
   var s3done    = document.getElementById('iqe_s3done_'+id) && document.getElementById('iqe_s3done_'+id).checked;
   var s3dec     = document.getElementById('iqe_s3dec_'+id)  && document.getElementById('iqe_s3dec_'+id).checked;
-  var s1done    = document.getElementById('iqe_s1done_'+id) && (document.getElementById('iqe_s1done_'+id) && document.getElementById('iqe_s1done_'+id).checked);
+  var s1done    = !!(document.getElementById('iqe_s1done_'+id) && document.getElementById('iqe_s1done_'+id).checked);
   var rdone     = document.getElementById('iqe_rdone_'+id)  && document.getElementById('iqe_rdone_'+id).checked;
   // 体験チェック: trials container内のチェックボックスを確認
   var trialsContainer = document.getElementById('iqtrials_'+id);
@@ -6897,7 +7080,7 @@ function fireIqTaskTrigger(trigger, apoDtStr, apoTimeStr, classroom, studentName
           // 前の勤務日13:00が既に過ぎている → アポ当日に繰り上げ
           if(apoHour2 < 13){
             // アポが午前 → アポ当日アポ1時間前
-            var rt = new Date(apoDt); rt.setHours(rt.getHours()-1);
+            rt = new Date(apoDt); rt.setHours(rt.getHours()-1);
             due = apoDateStr2 + 'T' + (rt.getHours()<10?'0':'')+rt.getHours()+':'+(rt.getMinutes()<10?'0':'')+rt.getMinutes();
           } else {
             // アポが13時以降 → アポ当日13:00
@@ -6997,8 +7180,9 @@ function fireIqTaskTrigger(trigger, apoDtStr, apoTimeStr, classroom, studentName
       // 紐付け済み: memosに追加
       var m = matched[0];
       if(!m.memos) m.memos = [];
+      var newIqId = 'iq_' + Date.now() + '_' + Math.random().toString(36).slice(2,5);
       m.memos.push({
-        id: 'iq_' + Date.now() + '_' + Math.random().toString(36).slice(2,5),
+        id: newIqId,
         date: today,
         type: 'memo',
         label: 'other',
@@ -7219,7 +7403,7 @@ function saveIqCard(id, skipRender){
   if(!iq) return;
   var s1timeEl = document.getElementById('iqe_s1time_'+id);
   var steps = {
-    visit:  { done: (document.getElementById('iqe_s1done_'+id) && document.getElementById('iqe_s1done_'+id).checked), date: document.getElementById('iqe_s1date_'+id).value, time: s1timeEl ? s1timeEl.value : '' },
+    visit:  { done: (document.getElementById('iqe_s1done_'+id) && document.getElementById('iqe_s1done_'+id).checked), date: (document.getElementById('iqe_s1date_'+id)||{value:''}).value, time: s1timeEl ? s1timeEl.value : '' },
     enroll: {
       done:     !!(document.getElementById('iqe_s3done_'+id) && document.getElementById('iqe_s3done_'+id).checked),
       date:     '',
@@ -7602,7 +7786,7 @@ function confirmEnrollProceed(){
     komas:             getKomasFromWrap('enrollKomaWrap'),
     lessonDates:       getLessonDates('enrollLessonDates'),
     enrollRoute:       document.getElementById('enrollRoute') ? document.getElementById('enrollRoute').value : '',
-    jukuLeave:'', caEnroll:'', caLeave:'',
+    jukuLeave:'', caEnroll: document.getElementById('enrollAttrCa').checked ? document.getElementById('enrollDate').value : '', caLeave:'',
     interviews:[], memos:[]
   };
   // 来訪アポの入会面談メモを面談履歴（入会時ラベル）に引き継ぎ
@@ -8149,7 +8333,7 @@ function tmplDueTimeTypeChange(sel){
   var idx = row.dataset.idx;
   var timeEl = document.getElementById('tmplDueTime_'+trigger+'_'+idx);
   if(timeEl) timeEl.style.display = sel.value === 'fix' ? '' : 'none';
-  if(timeEl && sel.value !== 'fix') timeEl.querySelector('input') && (timeEl.querySelector('input').value = '');
+  if(timeEl && sel.value !== 'fix') timeEl.value = '';
 }
 
 function tmplCollectAll(){
