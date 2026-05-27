@@ -20,6 +20,7 @@
   --red: #ef4444;
   --blue: #3b82f6;
   --amber: #f59e0b;
+  --green: #10b981;
   --shadow-sm: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
   --shadow: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
   --radius: 10px;
@@ -849,6 +850,10 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
       <div class="sm-bulk-sep"></div>
       <button class="sm-bulk-btn-danger" onclick="bulkDeleteTasks()">🗑 削除</button>
       <button class="sm-bulk-clear" onclick="clearBulkSelection()">✕ 選択解除</button>
+    </div>
+
+    <div id="bulk-action-bar-issue" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:1000;background:#1e293b;color:white;padding:10px 16px;align-items:center;gap:8px;font-size:13px;">
+      <span style="font-weight:700;color:#fbbf24;" id="bulk-count-label-issue">0件選択中</span>
     </div>
 
     <!-- 設定タブ -->
@@ -3333,7 +3338,7 @@ function onDetailTaskInput(idx){
   var container = document.getElementById('dttaskrows_iv');
   if(!container) return;
   if(val && !document.getElementById('dttaskrow_'+(idx+1)) && idx < 4){
-    container.insertAdjacentHTML('beforeend', buildDetailTaskRow(idx+1));
+    container.insertAdjacentHTML('beforeend', buildDtTaskRow(idx+1));
     _dtTaskIdx = idx+1;
   }
 }
@@ -3585,26 +3590,26 @@ function completeTask(id){
   if(_detailIdx===null) return;
   var m=_members[_detailIdx];
   var r=(m.memos||[]).filter(function(r){ return r.id===id; })[0];
-  if(r){ r.taskDone=true; renderMemos(m); saveToCache(); saveToGas(); renderTasks(); showToast('タスクを完了しました'); }
+  if(r){ r.taskDone=true; saveToCache(); saveToGas(); renderTasks(); showToast('タスクを完了しました'); }
 }
 function uncompleteTask(id){
   if(_detailIdx===null) return;
   var m=_members[_detailIdx];
   var r=(m.memos||[]).filter(function(r){ return r.id===id; })[0];
-  if(r){ r.taskDone=false; renderMemos(m); saveToCache(); saveToGas(); renderTasks(); showToast('未完了に戻しました'); }
+  if(r){ r.taskDone=false; saveToCache(); saveToGas(); renderTasks(); showToast('未完了に戻しました'); }
 }
 
 function completeInterviewTask(id){
   if(_detailIdx===null) return;
   var m=_members[_detailIdx];
   var r=(m.interviews||[]).filter(function(r){ return r.id===id; })[0];
-  if(r){ r.taskDone=true; renderInterviews(m); saveToCache(); saveToGas(); renderTasks(); showToast('約束を完了しました'); }
+  if(r){ r.taskDone=true; saveToCache(); saveToGas(); renderTasks(); showToast('約束を完了しました'); }
 }
 function uncompleteInterviewTask(id){
   if(_detailIdx===null) return;
   var m=_members[_detailIdx];
   var r=(m.interviews||[]).filter(function(r){ return r.id===id; })[0];
-  if(r){ r.taskDone=false; renderInterviews(m); saveToCache(); saveToGas(); renderTasks(); showToast('未完了に戻しました'); }
+  if(r){ r.taskDone=false; saveToCache(); saveToGas(); renderTasks(); showToast('未完了に戻しました'); }
 }
 
 // ===== 記録追加・編集モーダル =====
@@ -3678,7 +3683,6 @@ function saveRecord(){
         r.isTask=isTask; r.due=isTask?document.getElementById('rDueInterview').value:'';
         if(!r.taskDone) r.taskDone=false;
       }
-      renderInterviews(m);
     } else {
       var r=(m.memos||[]).find(function(x){ return x.id===_editRecordId; });
       if(r){
@@ -3686,7 +3690,6 @@ function saveRecord(){
         r.date=date; r.content=content; r.isTask=isTask;
         r.due=isTask?document.getElementById('rDue').value:'';
       }
-      renderMemos(m);
     }
     closeRecordModal(); saveToCache(); saveToGas(); showToast('更新しました');
   } else {
@@ -3710,12 +3713,10 @@ function saveRecord(){
           '授業内'
         );
       }
-      renderInterviews(m);
     } else {
       if(!m.memos) m.memos=[];
       var isTask=document.getElementById('rIsTask').checked;
       m.memos.push({ id:genId(), date:date, content:content, isTask:isTask, due:isTask?document.getElementById('rDue').value:'', taskDone:false });
-      renderMemos(m);
     }
     closeRecordModal(); saveToCache(); saveToGas(); showToast('保存しました');
   }
@@ -5147,8 +5148,8 @@ function getMatchingKomas(m){
     var isCa  = k.id && k.id.indexOf('ca_')===0;
     // satTypeがあるコマは塾の土曜授業（isCaはfalseのはず）
     if(!_bulkFilter.course.length) return true;
-    if(_bulkFilter.course.indexOf('juku')>=0 && !isCa) return true;
-    if(_bulkFilter.course.indexOf('ca')>=0   && isCa)  return true;
+    if(_bulkFilter.course.indexOf('塾')>=0 && !isCa) return true;
+    if(_bulkFilter.course.indexOf('CA')>=0   && isCa)  return true;
     return false;
   });
 }
@@ -7407,7 +7408,7 @@ function saveIqCard(id, skipRender){
     enroll: {
       done:     !!(document.getElementById('iqe_s3done_'+id) && document.getElementById('iqe_s3done_'+id).checked),
       date:     '',
-      declined: document.getElementById('iqe_s3dec_'+id).checked,
+      declined: (document.getElementById('iqe_s3dec_'+id)||{}).checked,
       class1Date: (document.getElementById('iqe_c1date_'+id)||{}).value||'',
       class1Koma: (document.getElementById('iqe_c1koma_'+id)||{}).value||'',
       class1Time: (function(){ var ko=document.getElementById('iqe_c1koma_'+id); if(ko&&ko.value) return getKomaStartTime(ko.value)||''; return (document.getElementById('iqe_c1time_'+id)||{}).value||''; })(),
@@ -7920,7 +7921,7 @@ function renderStatsInquiry(){
   var prev = pm.prev ? inMonths(all,pm.prev) : null;
 
   var total    = data.length;
-  var enrolled = data.filter(function(q){return q.status==='入会';}).length;
+  var enrolled = data.filter(function(q){return q.status==='入会確約';}).length;
   var trial    = data.filter(function(q){return q.status==='体験済'||q.status==='入会確約';}).length;
   var rate     = total>0?Math.round(enrolled/total*100):0;
   var conv     = trial>0?Math.round(enrolled/trial*100):0;
