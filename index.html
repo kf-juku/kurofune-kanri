@@ -4691,9 +4691,11 @@ function getKomasFromUI(){
     ['北久里浜','久里浜'].forEach(function(cls){
       (defMap[cls]||[]).forEach(function(def){
         var cb = document.getElementById('koma_'+def.id);
-        if(cb && cb.checked && !cb.disabled){
-          var olCb = document.getElementById('komaol_'+def.id);
-          komas.push({id:def.id, classroom:cls, youbi:def.youbi, time:def.time, online:!!(olCb&&olCb.checked)});
+        var olCb = document.getElementById('komaol_'+def.id);
+        var isOnline = !!(olCb && olCb.checked && !olCb.disabled);
+        var isNormal = !!(cb && cb.checked && !cb.disabled);
+        if(isNormal || isOnline){
+          komas.push({id:def.id, classroom:cls, youbi:def.youbi, time:def.time, online:isOnline && !isNormal});
         }
       });
     });
@@ -4807,7 +4809,7 @@ function getSatKomasFromUI(){
 }
 
 // ===== マスタ取得 =====
-function getClassrooms(){ try{ return JSON.parse(localStorage.getItem('sm_classrooms')||'[]'); }catch(e){ return []; } }
+function getClassrooms(){ return loadMaster(KEY_CLS, DEFAULT_CLS); }
 function getYoubi(){ try{ return JSON.parse(localStorage.getItem('sm_youbi')||'[]'); }catch(e){ return []; } }
 function getSchools(){ try{ return JSON.parse(localStorage.getItem('sm_schools')||'[]'); }catch(e){ return []; } }
 function getTargetSchools(){ try{ return JSON.parse(localStorage.getItem('sm_target_schools')||'[]'); }catch(e){ return []; } }
@@ -5145,7 +5147,7 @@ function buildKomaSummary(m){
     parts.push('CA '+ca.map(function(k){ return k.youbi+(k.time?k.time.split('〜')[0]:''); }).join('・'));
   }
   // 土曜授業（satTypeで識別）
-  var satLabels = {eiken:'英検対策', sat:'土曜演習', juken:'受験特訓'};
+  var satLabels = {eiken:'英検対策', sat:'土曜演習', hira:'平日振替', juken:'受験特訓'};
   var satKomas = komas.filter(function(k){ return k.satType; });
   satKomas.forEach(function(k){
     var lbl = satLabels[k.satType] || k.satType;
@@ -5160,7 +5162,7 @@ function buildBulkCardKomaBadges(m){
   ensureBulkFilter();
   var komas = m.komas || [];
   var html = '';
-  var satLabels = {eiken:'英検対策', sat:'土曜演習', juken:'受験特訓'};
+  var satLabels = {eiken:'英検対策', sat:'土曜演習', hira:'平日振替', juken:'受験特訓'};
 
   komas.forEach(function(k){
     var t = k.time ? k.time.split('〜')[0] : '';
@@ -7219,9 +7221,11 @@ function getKomasFromWrap(wrapId){
     ['北久里浜','久里浜'].forEach(function(cls){
       (defMap[cls]||[]).forEach(function(def){
         var cb = wrap.querySelector('#koma_'+def.id);
-        if(cb && cb.checked){
-          var ol = wrap.querySelector('#komaol_'+def.id);
-          komas.push({id:def.id, classroom:cls, youbi:def.youbi, time:def.time, online:!!(ol&&ol.checked)});
+        var ol = wrap.querySelector('#komaol_'+def.id);
+        var isOnline = !!(ol && ol.checked);
+        var isNormal = !!(cb && cb.checked);
+        if(isNormal || isOnline){
+          komas.push({id:def.id, classroom:cls, youbi:def.youbi, time:def.time, online:isOnline && !isNormal});
         }
       });
     });
