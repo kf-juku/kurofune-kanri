@@ -2538,7 +2538,7 @@ function saveDetail(){
   document.getElementById('detailHeadSub').textContent=(m.reading||'')+(m.grade?' / '+m.grade:'');
   updateDetailHeader();
   _detailIsDirty = false;
-  saveToCache(); saveToGas();
+  saveToCache(); saveOneStudentToGas(m);
   renderList(); updateClassroomFilter();
   showToast('保存しました');
 }
@@ -3355,7 +3355,7 @@ function saveDetailEduRecord(){
   });
 
   _detailIsDirty = false;
-  saveToCache(); saveToGas(); renderTasks();
+  saveToCache(); saveOneStudentToGas(_members[_detailIdx]); renderTasks();
   showToast('保存しました');
   // フォームリセット
   document.getElementById('dtcontent_interview').value = '';
@@ -3559,26 +3559,26 @@ function completeTask(id){
   if(_detailIdx===null) return;
   var m=_members[_detailIdx];
   var r=(m.memos||[]).filter(function(r){ return r.id===id; })[0];
-  if(r){ r.taskDone=true; saveToCache(); saveToGas(); renderTasks(); showToast('タスクを完了しました'); }
+  if(r){ r.taskDone=true; saveToCache(); saveOneStudentToGas(_members[_detailIdx]); renderTasks(); showToast('タスクを完了しました'); }
 }
 function uncompleteTask(id){
   if(_detailIdx===null) return;
   var m=_members[_detailIdx];
   var r=(m.memos||[]).filter(function(r){ return r.id===id; })[0];
-  if(r){ r.taskDone=false; saveToCache(); saveToGas(); renderTasks(); showToast('未完了に戻しました'); }
+  if(r){ r.taskDone=false; saveToCache(); saveOneStudentToGas(_members[_detailIdx]); renderTasks(); showToast('未完了に戻しました'); }
 }
 
 function completeInterviewTask(id){
   if(_detailIdx===null) return;
   var m=_members[_detailIdx];
   var r=(m.interviews||[]).filter(function(r){ return r.id===id; })[0];
-  if(r){ r.taskDone=true; saveToCache(); saveToGas(); renderTasks(); showToast('約束を完了しました'); }
+  if(r){ r.taskDone=true; saveToCache(); saveOneStudentToGas(_members[_detailIdx]); renderTasks(); showToast('約束を完了しました'); }
 }
 function uncompleteInterviewTask(id){
   if(_detailIdx===null) return;
   var m=_members[_detailIdx];
   var r=(m.interviews||[]).filter(function(r){ return r.id===id; })[0];
-  if(r){ r.taskDone=false; saveToCache(); saveToGas(); renderTasks(); showToast('未完了に戻しました'); }
+  if(r){ r.taskDone=false; saveToCache(); saveOneStudentToGas(_members[_detailIdx]); renderTasks(); showToast('未完了に戻しました'); }
 }
 
 // ===== 記録追加・編集モーダル =====
@@ -3660,7 +3660,7 @@ function saveRecord(){
         r.due=isTask?document.getElementById('rDue').value:'';
       }
     }
-    closeRecordModal(); saveToCache(); saveToGas(); showToast('更新しました');
+    closeRecordModal(); saveToCache(); saveOneStudentToGas(_members[_detailIdx]); showToast('更新しました');
   } else {
     if(_recordType==='interview'){
       if(!m.interviews) m.interviews=[];
@@ -3687,7 +3687,7 @@ function saveRecord(){
       var isTask=document.getElementById('rIsTask').checked;
       m.memos.push({ id:genId(), date:date, content:content, isTask:isTask, due:isTask?document.getElementById('rDue').value:'', taskDone:false });
     }
-    closeRecordModal(); saveToCache(); saveToGas(); showToast('保存しました');
+    closeRecordModal(); saveToCache(); saveOneStudentToGas(_members[_detailIdx]); showToast('保存しました');
   }
 }
 
@@ -4108,14 +4108,14 @@ function completeTaskFromList(memberId,taskId,type){
   if(!m) return;
   var arr=type==='interview'?(m.interviews||[]):(m.memos||[]);
   var r=arr.filter(function(r){ return r.id===taskId; })[0];
-  if(r){ r.taskDone=true; saveToCache(); saveToGas(); renderTasks(); showToast('タスクを完了しました'); }
+  if(r){ r.taskDone=true; saveToCache(); saveOneStudentToGas(_members[_detailIdx]); renderTasks(); showToast('タスクを完了しました'); }
 }
 function uncompleteTaskFromList(memberId,taskId,type){
   var m=_members.filter(function(m){ return m.id===memberId; })[0];
   if(!m) return;
   var arr=type==='interview'?(m.interviews||[]):(m.memos||[]);
   var r=arr.filter(function(r){ return r.id===taskId; })[0];
-  if(r){ r.taskDone=false; saveToCache(); saveToGas(); renderTasks(); showToast('未完了に戻しました'); }
+  if(r){ r.taskDone=false; saveToCache(); saveOneStudentToGas(_members[_detailIdx]); renderTasks(); showToast('未完了に戻しました'); }
 }
 function deleteMemoTask(memberId, taskId){
   showDeleteConfirm('このタスクを削除しますか？', function(){
@@ -4245,6 +4245,18 @@ function loadFromGas(){
       if(btn){ btn.innerHTML='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.52"/></svg> 読み込み'; btn.disabled=false; btn.style.color=''; }
       if(logoDiv){ logoDiv.style.opacity=''; }
     });
+}
+
+function saveOneStudentToGas(m){
+  var url=getGasUrl();
+  if(!url || !m) return;
+  var fd=new FormData();
+  fd.append('action','updateOneStudent');
+  fd.append('student',JSON.stringify(m));
+  window._memberSaving = true;
+  fetch(url,{method:'POST',body:fd})
+    .then(function(){ window._lastGasSync = Date.now(); window._memberSaving = false; })
+    .catch(function(e){ window._memberSaving = false; console.warn('[GAS] 1件保存失敗:', e); showToast('GAS保存に失敗しました', true); });
 }
 
 function saveToGas(){
