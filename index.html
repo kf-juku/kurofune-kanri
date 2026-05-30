@@ -4376,7 +4376,7 @@ function normalizeStudent(m){
         'eiken': {id:'sat_eiken', youbi:'土', time:'16:20〜17:10', satType:'eiken'},
         'sat1':  {id:'sat_sat1',  youbi:'土', time:'17:15〜18:35', satType:'sat'},
         'sat2':  {id:'sat_sat2',  youbi:'土', time:'18:40〜20:00', satType:'sat'},
-        'juken': {id:'sat_juken', youbi:'土', time:'19:00〜20:30', satType:'juken'}
+        'juken': {id:'sat_juken', youbi:'土', time:'19:00〜21:30', satType:'juken'}
       };
       oldSat.forEach(function(s){
         var def = satMap[s];
@@ -4598,7 +4598,7 @@ var SAT_KOMA_DEF = [
   {id:'sat_sat1',  youbi:'土', time:'17:15〜18:35', satType:'sat',   label:'土曜演習①'},
   {id:'sat_sat2',  youbi:'土', time:'18:40〜20:00', satType:'sat',   label:'土曜演習②'},
   {id:'sat_hira',  youbi:'',  time:'',              satType:'hira',  label:'平日振替'},
-  {id:'sat_juken', youbi:'土', time:'19:00〜20:30', satType:'juken', label:'受験特訓'},
+  {id:'sat_juken', youbi:'土', time:'19:00〜21:30', satType:'juken', label:'受験特訓'},
 ];
 
 function buildKomaTableHtml(defMap, komas, disabled, simpleMode){
