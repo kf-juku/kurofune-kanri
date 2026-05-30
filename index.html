@@ -2061,7 +2061,7 @@ function switchTab(tab){
           .then(function(data){
             if(window._memberSaving) return; // fetch中に保存が始まった場合はスキップ
             if(data && data.students){
-              _members = data.students.map(normalizeStudent);
+              mergeMembersFromGas(data.students.map(normalizeStudent));
               saveToCache();
               renderList(); updateClassroomFilter(); renderTasks();
               if(tab==='scoreInput') renderScoreInput();
@@ -4235,7 +4235,19 @@ function loadFromGas(){
     .then(function(r){ return r.json(); })
     .then(function(data){
       if(data&&data.students){
-        _members=data.students.map(normalizeStudent);
+        var gasStudents = data.students.map(normalizeStudent);
+        // 編集中の生徒だけ保護して全件マージ
+        var editingId = (_detailIdx !== null && _members[_detailIdx]) ? _members[_detailIdx].id : null;
+        if(editingId){
+          // 編集中の生徒をバックアップ
+          var editingMember = _members[_detailIdx];
+          _members = gasStudents;
+          // 編集中の生徒を復元（GASの版で上書きしない）
+          var newIdx = _members.findIndex(function(m){ return m.id === editingId; });
+          if(newIdx >= 0){ _members[newIdx] = editingMember; _detailIdx = newIdx; }
+        } else {
+          _members = gasStudents;
+        }
         saveToCache(); renderList(); updateClassroomFilter(); renderTasks();
         showToast('✅ '+_members.length+'人を読み込みました');
       } else { showToast('データが見つかりませんでした',true); }
@@ -4245,6 +4257,36 @@ function loadFromGas(){
       if(btn){ btn.innerHTML='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.52"/></svg> 読み込み'; btn.disabled=false; btn.style.color=''; }
       if(logoDiv){ logoDiv.style.opacity=''; }
     });
+}
+
+// GASから取得したデータをローカルとマージする
+// ルール：
+//   - GASにあってローカルにない → 追加
+//   - ローカルにあってGASにない → そのまま保持（削除は手動のみ）
+//   - 両方にある → GASで更新。ただし編集中の生徒（_detailIdx）はスキップ
+function mergeMembersFromGas(gasStudents){
+  if(!gasStudents || !gasStudents.length) return;
+  var editingId = (_detailIdx !== null && _members[_detailIdx]) ? _members[_detailIdx].id : null;
+  var localMap = {};
+  _members.forEach(function(m){ if(m.id) localMap[m.id] = m; });
+  var gasMap = {};
+  gasStudents.forEach(function(s){ if(s.id) gasMap[s.id] = s; });
+
+  // GASにある生徒を更新 or 追加
+  gasStudents.forEach(function(s){
+    if(!s.id) return;
+    if(s.id === editingId) return; // 編集中はスキップ
+    if(localMap[s.id]){
+      // 既存生徒をGASの最新で更新（配列内の位置を保持）
+      var idx = _members.indexOf(localMap[s.id]);
+      if(idx >= 0) _members[idx] = s;
+    } else {
+      // 新規生徒を追加
+      _members.push(s);
+    }
+  });
+
+  // ローカルにあってGASにない生徒はそのまま保持（削除しない）
 }
 
 function saveOneStudentToGas(m){
