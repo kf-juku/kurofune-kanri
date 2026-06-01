@@ -314,7 +314,7 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
 .koma-cb:checked + .koma-label { background: var(--crimson); border-color: var(--crimson); color: white; }
 .koma-cb.ca-koma:checked + .koma-label { background: var(--ca-blue); border-color: var(--ca-blue); color: white; }
 .koma-online-cb { display: none; }
-.koma-online-label { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 24px; border-radius: 5px; cursor: pointer; border: 1.5px solid var(--border); background: white; transition: all 0.1s; font-size: 9px; color: transparent; }
+.koma-online-label { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 24px; border-radius: 5px; cursor: pointer; border: 1.5px solid var(--border); background: white; transition: all 0.1s; font-size: 9px; color: #9ca3af; }
 .koma-online-cb:checked + .koma-online-label { background: #3b82f6; border-color: #3b82f6; color: white; }
 .koma-legend { display: flex; gap: 10px; margin-top: 6px; font-size: 10px; color: var(--text-muted); }
 .koma-legend-item { display: flex; align-items: center; gap: 3px; }
@@ -4644,9 +4644,17 @@ var SAT_KOMA_DEF = [
 ];
 
 function buildKomaTableHtml(defMap, komas, disabled, simpleMode){
-  var html = '';
   var dis = disabled ? ' disabled' : '';
   var sectionClass = disabled ? ' koma-section-disabled' : '';
+  var CR_STYLE = {
+    '北久里浜': 'background:#f0f9ff;border:1.5px solid #bae6fd;border-radius:8px;padding:8px;flex:1;min-width:0;',
+    '久里浜':   'background:#fff7ed;border:1.5px solid #fed7aa;border-radius:8px;padding:8px;flex:1;min-width:0;'
+  };
+  var CR_LABEL_STYLE = {
+    '北久里浜': 'font-size:11px;font-weight:700;color:#0369a1;margin-bottom:6px;',
+    '久里浜':   'font-size:11px;font-weight:700;color:#c2410c;margin-bottom:6px;'
+  };
+  var cols = '';
   ['北久里浜','久里浜'].forEach(function(cls){
     var defs = defMap[cls];
     if(!defs || !defs.length) return;
@@ -4654,35 +4662,37 @@ function buildKomaTableHtml(defMap, komas, disabled, simpleMode){
     defs.forEach(function(d){ if(youbis.indexOf(d.youbi)<0) youbis.push(d.youbi); });
     var times = [];
     defs.forEach(function(d){ if(times.indexOf(d.time)<0) times.push(d.time); });
-    html += '<div class="koma-section-label' + sectionClass + '">【' + cls + '】</div>';
-    html += '<table class="koma-table' + (disabled?' koma-table-disabled':'') + '"><thead><tr><th>時間</th>';
-    youbis.forEach(function(y){ html += '<th>' + y + '</th>'; });
-    html += '</tr></thead><tbody>';
+    var col = '<div style="' + CR_STYLE[cls] + '">';
+    col += '<div class="koma-section-label' + sectionClass + '" style="' + CR_LABEL_STYLE[cls] + '">【' + cls + '】</div>';
+    col += '<table class="koma-table' + (disabled?' koma-table-disabled':'') + '" style="width:100%;"><thead><tr><th>時間</th>';
+    youbis.forEach(function(y){ col += '<th>' + y + '</th>'; });
+    col += '</tr></thead><tbody>';
     times.forEach(function(t){
-      html += '<tr><td class="koma-time">' + t + '</td>';
+      col += '<tr><td class="koma-time">' + t + '</td>';
       youbis.forEach(function(y){
         var def = defs.find(function(d){ return d.youbi===y && d.time===t; });
         if(def){
           var existing = komas.find(function(k){ return k.id===def.id; });
           var checked = (!disabled && existing) ? 'checked' : '';
-          html += '<td>'
+          col += '<td>'
             + '<input class="koma-cb" type="checkbox" id="koma_'+def.id+'" '+checked+dis+'>'
             + '<label class="koma-label" for="koma_'+def.id+'"' + (disabled?' style="opacity:0.3;cursor:default;"':'') + '>✓</label>';
           if(!simpleMode){
             var online = (!disabled && existing && existing.online) ? 'checked' : '';
-            html += '<input class="koma-online-cb" type="checkbox" id="komaol_'+def.id+'" '+online+dis+'>'
-              + '<label class="koma-online-label" for="komaol_'+def.id+'"' + (disabled?' style="opacity:0.3;cursor:default;"':'') + '>📱</label>';
+            col += '<input class="koma-online-cb" type="checkbox" id="komaol_'+def.id+'" '+online+dis+'>'
+              + '<label class="koma-online-label" for="komaol_'+def.id+'"' + (disabled?' style="opacity:0.3;cursor:default;"':'') + '><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7zm7-13h-2.18l-1.64-2H8.82L7.18 2.5H5A2.5 2.5 0 0 0 2.5 5v14A2.5 2.5 0 0 0 5 21.5h14a2.5 2.5 0 0 0 2.5-2.5V5A2.5 2.5 0 0 0 19 2.5z"/></svg></label>';
           }
-          html += '</td>';
+          col += '</td>';
         } else {
-          html += '<td style="background:#f9fafb;"></td>';
+          col += '<td style="background:#f9fafb;"></td>';
         }
       });
-      html += '</tr>';
+      col += '</tr>';
     });
-    html += '</tbody></table>';
+    col += '</tbody></table></div>';
+    cols += col;
   });
-  return html;
+  return '<div style="display:flex;gap:10px;margin-top:6px;">' + cols + '</div>';
 }
 
 function renderKomaTable(m){
@@ -4766,13 +4776,21 @@ function renderSatKomaUI(komas, classroom){
   wrap.innerHTML = '';
 
   var CLASSROOMS = ['北久里浜', '久里浜'];
+  var CR_BG = {'北久里浜':'#f0f9ff', '久里浜':'#fff7ed'};
+  var CR_BORDER = {'北久里浜':'#bae6fd', '久里浜':'#fed7aa'};
+  var CR_COLOR = {'北久里浜':'#0369a1', '久里浜':'#c2410c'};
+
+  // 外側flexコンテナ
+  var flexWrap = document.createElement('div');
+  flexWrap.style.cssText = 'display:flex;gap:10px;margin-top:6px;';
+  wrap.appendChild(flexWrap);
 
   CLASSROOMS.forEach(function(cr) {
     // セクションヘッダー
     var secDiv = document.createElement('div');
-    secDiv.style.cssText = 'margin-bottom:10px;border:1.5px solid #cbd5e1;border-radius:8px;padding:8px 10px;background:#f8fafc;';
+    secDiv.style.cssText = 'flex:1;min-width:0;border:1.5px solid '+CR_BORDER[cr]+';border-radius:8px;padding:8px 10px;background:'+CR_BG[cr]+';';
     var secLabel = document.createElement('div');
-    secLabel.style.cssText = 'font-size:11px;font-weight:700;color:#334155;margin-bottom:8px;';
+    secLabel.style.cssText = 'font-size:11px;font-weight:700;color:'+CR_COLOR[cr]+';margin-bottom:8px;';
     secLabel.textContent = '【' + cr + '】';
     secDiv.appendChild(secLabel);
 
@@ -4877,7 +4895,7 @@ function renderSatKomaUI(komas, classroom){
     jukenRow.appendChild(jukenCb); jukenRow.appendChild(jukenLbl);
     secDiv.appendChild(jukenRow);
 
-    wrap.appendChild(secDiv);
+    flexWrap.appendChild(secDiv);
   });
 }
 
