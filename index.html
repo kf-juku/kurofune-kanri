@@ -314,7 +314,7 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
 .koma-cb:checked + .koma-label { background: var(--crimson); border-color: var(--crimson); color: white; }
 .koma-cb.ca-koma:checked + .koma-label { background: var(--ca-blue); border-color: var(--ca-blue); color: white; }
 .koma-online-cb { display: none; }
-.koma-online-label { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 24px; border-radius: 5px; cursor: pointer; border: 1.5px solid var(--border); background: white; transition: all 0.1s; font-size: 9px; color: #9ca3af; }
+.koma-online-label { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 24px; border-radius: 6px; cursor: pointer; border: 1.5px solid var(--border); background: white; transition: all 0.1s; font-size: 9px; color: #9ca3af; }
 .koma-online-cb:checked + .koma-online-label { background: #3b82f6; border-color: #3b82f6; color: white; }
 .koma-legend { display: flex; gap: 10px; margin-top: 6px; font-size: 10px; color: var(--text-muted); }
 .koma-legend-item { display: flex; align-items: center; gap: 3px; }
@@ -1374,7 +1374,7 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
         <div id="komaJukuWrap"></div>
         <div class="koma-legend">
           <div class="koma-legend-item"><div class="koma-legend-dot" style="background:var(--crimson);"></div>対面</div>
-          <div class="koma-legend-item"><div class="koma-legend-dot" style="background:#3b82f6;"></div>オンライン</div>
+          <div class="koma-legend-item"><span style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:14px;border-radius:4px;background:#2D8CFF"><svg width="10" height="10" viewBox="0 0 24 24" fill="white"><path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11l-4 4z"/></svg></span>Zoom（オンライン）</div>
         </div>
         <div class="d-section-title" style="margin-top:14px;">🗓️ 土曜授業</div>
         <div class="koma-opt-list" id="komaOptSatWrap"></div>
@@ -4680,7 +4680,7 @@ function buildKomaTableHtml(defMap, komas, disabled, simpleMode){
           if(!simpleMode){
             var online = (!disabled && existing && existing.online) ? 'checked' : '';
             col += '<input class="koma-online-cb" type="checkbox" id="komaol_'+def.id+'" '+online+dis+'>'
-              + '<label class="koma-online-label" for="komaol_'+def.id+'"' + (disabled?' style="opacity:0.3;cursor:default;"':'') + '><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7zm7-13h-2.18l-1.64-2H8.82L7.18 2.5H5A2.5 2.5 0 0 0 2.5 5v14A2.5 2.5 0 0 0 5 21.5h14a2.5 2.5 0 0 0 2.5-2.5V5A2.5 2.5 0 0 0 19 2.5z"/></svg></label>';
+              + '<label class="koma-online-label" for="komaol_'+def.id+'"' + (disabled?' style="opacity:0.3;cursor:default;"':'') + '><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11l-4 4z"/></svg></label>';
           }
           col += '</td>';
         } else {
