@@ -8522,6 +8522,24 @@ function switchCfgTab(tab){
   }
 }
 
+function checkAutoLeave(){
+  var today = new Date(); today.setHours(0,0,0,0);
+  var changed = false;
+  (_members||[]).forEach(function(m){
+    if((m.status==='在籍'||m.status==='休塾') && m.leaveDate){
+      var ld = new Date(m.leaveDate + 'T00:00:00');
+      if(!isNaN(ld) && ld < today){
+        m.status = '退会';
+        // 在籍中コースの退会日が空なら最終授業日を自動セット
+        if(m.attrJuku && !m.jukuLeave) m.jukuLeave = m.leaveDate;
+        if(m.attrCa   && !m.caLeave)   m.caLeave   = m.leaveDate;
+        changed = true;
+      }
+    }
+  });
+  if(changed){ saveToCache(); renderList(); saveToGas(); }
+}
+
 // ===== 初期化 =====
 window.addEventListener('load', function(){
   _members = loadFromCache();
