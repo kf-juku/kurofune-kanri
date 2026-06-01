@@ -4757,109 +4757,175 @@ function getKomasFromUI(){
   return komas;
 }
 
-// 土曜コマUIを描画（チェックボックス）
-// satType:'hira'（平日振替）のときはチェック後にコマ選択プルダウンを表示する
+// 土曜コマUIを描画（教室別2セクション：北久里浜・久里浜）
+// 各教室に英検・土曜演習①②・平日振替・受験特訓を表示
+// hiraKomaの形式：「教室_曜日時刻」例: 北久里浜_月17:15〜18:35
 function renderSatKomaUI(komas, classroom){
   var wrap = document.getElementById('komaOptSatWrap');
   if(!wrap) return;
   wrap.innerHTML = '';
 
-  // --- 英検対策 ---
-  var eikenDef = SAT_KOMA_DEF.find(function(d){ return d.satType === 'eiken'; });
-  if(eikenDef){
-    var ex = (komas||[]).find(function(k){ return k.id === eikenDef.id; });
-    var cbId = 'satKoma_' + eikenDef.id;
-    var cb = document.createElement('input');
-    cb.type='checkbox'; cb.id=cbId; cb.className='koma-opt-cb'; cb.checked=!!ex;
-    var lbl = document.createElement('label');
-    lbl.htmlFor=cbId; lbl.className='koma-opt-label';
-    lbl.textContent = eikenDef.label + ' ' + eikenDef.time;
-    wrap.appendChild(cb); wrap.appendChild(lbl);
-  }
+  var CLASSROOMS = ['北久里浜', '久里浜'];
 
-  // --- 土曜演習グループ（①②・平日振替から1つ選択） ---
-  var grpDiv = document.createElement('div');
-  grpDiv.style.cssText = 'margin-top:8px;border:1.5px solid #cbd5e1;border-radius:8px;padding:8px 10px;background:#f8fafc;';
-  var grpLabel = document.createElement('div');
-  grpLabel.style.cssText = 'font-size:10px;font-weight:700;color:#64748b;margin-bottom:6px;';
-  grpLabel.textContent = '🗓️ 土曜演習（①②・平日振替のいずれか1つ）';
-  grpDiv.appendChild(grpLabel);
-  var grpItems = document.createElement('div');
-  grpItems.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;align-items:center;';
+  CLASSROOMS.forEach(function(cr) {
+    // セクションヘッダー
+    var secDiv = document.createElement('div');
+    secDiv.style.cssText = 'margin-bottom:10px;border:1.5px solid #cbd5e1;border-radius:8px;padding:8px 10px;background:#f8fafc;';
+    var secLabel = document.createElement('div');
+    secLabel.style.cssText = 'font-size:11px;font-weight:700;color:#334155;margin-bottom:8px;';
+    secLabel.textContent = '【' + cr + '】';
+    secDiv.appendChild(secLabel);
 
-  var satDefs = SAT_KOMA_DEF.filter(function(d){ return d.satType === 'sat' || d.satType === 'hira'; });
-  satDefs.forEach(function(def){
-    var existing = (komas||[]).find(function(k){ return k.id === def.id; });
-    var checked = !!existing;
-    var cbId = 'satKoma_' + def.id;
-    var cb = document.createElement('input');
-    cb.type='checkbox'; cb.id=cbId; cb.className='koma-opt-cb'; cb.checked=checked;
-    var lbl = document.createElement('label');
-    lbl.htmlFor=cbId; lbl.className='koma-opt-label';
-    lbl.textContent = def.label + (def.time ? ' '+def.time : '');
-    grpItems.appendChild(cb); grpItems.appendChild(lbl);
+    // 各コマ定義を教室ごとのIDで生成
+    var crKey = cr === '北久里浜' ? 'kita' : 'kuri';
 
-    // 平日振替：チェック時にコマ選択プルダウンを表示（所属教室で絞り込み）
-    if(def.satType === 'hira'){
-      var sel = document.createElement('select');
-      sel.id = 'satHiraKoma';
-      sel.style.cssText = 'display:'+(checked?'inline-flex':'none')+';font-size:11px;padding:3px 6px;border:1.5px solid var(--crimson);border-radius:6px;color:var(--crimson-dark);background:white;';
-      var hiraVal = existing ? (existing.hiraKoma || '') : '';
-      var hiraOpt = '<option value="">曜日・時刻を選択</option>';
-      // 所属教室でKOMA_DEFを絞り込む
-      var clsDefs = classroom ? (KOMA_DEF[classroom]||[]) : [];
-      if(!clsDefs.length){
-        // 教室未設定なら全コマ表示
-        ['北久里浜','久里浜'].forEach(function(c){ clsDefs = clsDefs.concat(KOMA_DEF[c]||[]); });
-      }
+    // --- 英検対策 ---
+    var eikenId = 'sat_eiken_' + crKey;
+    var eikenEx = (komas||[]).find(function(k){ return k.id === eikenId || (k.satType==='eiken' && k.classroom===cr); });
+    var eikenRow = document.createElement('div');
+    eikenRow.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:4px;';
+    var eikenCb = document.createElement('input');
+    eikenCb.type='checkbox'; eikenCb.id='satKoma_eiken_'+crKey; eikenCb.className='koma-opt-cb'; eikenCb.checked=!!eikenEx;
+    eikenCb.dataset.cr = cr; eikenCb.dataset.satType = 'eiken'; eikenCb.dataset.time = '16:20〜17:10';
+    var eikenLbl = document.createElement('label');
+    eikenLbl.htmlFor='satKoma_eiken_'+crKey; eikenLbl.className='koma-opt-label';
+    eikenLbl.textContent = '英検対策 16:20〜17:10';
+    eikenRow.appendChild(eikenCb); eikenRow.appendChild(eikenLbl);
+    secDiv.appendChild(eikenRow);
+
+    // --- 土曜演習グループ ---
+    var grpLabel = document.createElement('div');
+    grpLabel.style.cssText = 'font-size:10px;color:#64748b;margin:6px 0 4px;font-weight:600;';
+    grpLabel.textContent = '土曜演習（①②・平日振替のいずれか1つ）';
+    secDiv.appendChild(grpLabel);
+    var grpRow = document.createElement('div');
+    grpRow.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:4px;';
+
+    // 土曜演習①
+    var sat1Id = 'satKoma_sat1_' + crKey;
+    var sat1Ex = (komas||[]).find(function(k){ return k.id === 'sat_sat1_'+crKey || (k.satType==='sat' && k.time==='17:15〜18:35' && k.classroom===cr); });
+    var sat1Cb = document.createElement('input');
+    sat1Cb.type='checkbox'; sat1Cb.id=sat1Id; sat1Cb.className='koma-opt-cb'; sat1Cb.checked=!!sat1Ex;
+    sat1Cb.dataset.cr = cr; sat1Cb.dataset.satType = 'sat'; sat1Cb.dataset.time = '17:15〜18:35';
+    var sat1Lbl = document.createElement('label');
+    sat1Lbl.htmlFor=sat1Id; sat1Lbl.className='koma-opt-label';
+    sat1Lbl.textContent = '土曜演習① 17:15〜18:35';
+    grpRow.appendChild(sat1Cb); grpRow.appendChild(sat1Lbl);
+
+    // 土曜演習②
+    var sat2Id = 'satKoma_sat2_' + crKey;
+    var sat2Ex = (komas||[]).find(function(k){ return k.id === 'sat_sat2_'+crKey || (k.satType==='sat' && k.time==='18:40〜20:00' && k.classroom===cr); });
+    var sat2Cb = document.createElement('input');
+    sat2Cb.type='checkbox'; sat2Cb.id=sat2Id; sat2Cb.className='koma-opt-cb'; sat2Cb.checked=!!sat2Ex;
+    sat2Cb.dataset.cr = cr; sat2Cb.dataset.satType = 'sat'; sat2Cb.dataset.time = '18:40〜20:00';
+    var sat2Lbl = document.createElement('label');
+    sat2Lbl.htmlFor=sat2Id; sat2Lbl.className='koma-opt-label';
+    sat2Lbl.textContent = '土曜演習② 18:40〜20:00';
+    grpRow.appendChild(sat2Cb); grpRow.appendChild(sat2Lbl);
+
+    // 平日振替
+    var hiraId = 'satKoma_hira_' + crKey;
+    var hiraEx = (komas||[]).find(function(k){ return k.satType==='hira' && k.classroom===cr; });
+    // 旧形式互換：classroomなしのhiraで所属教室が一致するもの
+    if(!hiraEx) hiraEx = (komas||[]).find(function(k){ return k.satType==='hira' && !k.classroom; });
+    var hiraCb = document.createElement('input');
+    hiraCb.type='checkbox'; hiraCb.id=hiraId; hiraCb.className='koma-opt-cb'; hiraCb.checked=!!hiraEx;
+    hiraCb.dataset.cr = cr; hiraCb.dataset.satType = 'hira';
+    var hiraLbl = document.createElement('label');
+    hiraLbl.htmlFor=hiraId; hiraLbl.className='koma-opt-label';
+    hiraLbl.textContent = '平日振替';
+    grpRow.appendChild(hiraCb); grpRow.appendChild(hiraLbl);
+
+    // 平日振替プルダウン（教室+曜日+時刻）
+    var hiraSel = document.createElement('select');
+    hiraSel.id = 'satHiraKoma_' + crKey;
+    var hiraVal = hiraEx ? (hiraEx.hiraKoma || '') : '';
+    hiraSel.style.cssText = 'display:'+(hiraEx?'inline-flex':'none')+';font-size:11px;padding:3px 6px;border:1.5px solid var(--crimson);border-radius:6px;color:var(--crimson-dark);background:white;';
+    var hiraOpt = '<option value="">教室・曜日・時刻を選択</option>';
+    // 全教室の平日コマをリスト
+    ['北久里浜','久里浜'].forEach(function(c){
+      var clsDefs = (typeof KOMA_DEF !== 'undefined' && KOMA_DEF[c]) ? KOMA_DEF[c] : [];
       clsDefs.forEach(function(kd){
         if(['月','火','水','木','金'].indexOf(kd.youbi) !== -1){
-          var val = kd.youbi + kd.time;
-          hiraOpt += '<option value="'+val+'"'+(hiraVal===val?' selected':'')+'>'+kd.youbi+'曜 '+kd.time+'</option>';
+          var val = c + '_' + kd.youbi + kd.time;
+          var label = c + ' ' + kd.youbi + '曜 ' + kd.time;
+          hiraOpt += '<option value="'+val+'"'+(hiraVal===val?' selected':'')+'>'+label+'</option>';
         }
       });
-      sel.innerHTML = hiraOpt;
-      cb.addEventListener('change', function(){
-        sel.style.display = cb.checked ? 'inline-flex' : 'none';
-        if(!cb.checked) sel.value = '';
-      });
-      grpItems.appendChild(sel);
-    }
-  });
-  grpDiv.appendChild(grpItems);
-  wrap.appendChild(grpDiv);
+    });
+    hiraSel.innerHTML = hiraOpt;
+    hiraCb.addEventListener('change', function(){
+      hiraSel.style.display = hiraCb.checked ? 'inline-flex' : 'none';
+      if(!hiraCb.checked) hiraSel.value = '';
+    });
+    grpRow.appendChild(hiraSel);
+    secDiv.appendChild(grpRow);
 
-  // --- 受験特訓 ---
-  var jukenDef = SAT_KOMA_DEF.find(function(d){ return d.satType === 'juken'; });
-  if(jukenDef){
-    var ex2 = (komas||[]).find(function(k){ return k.id === jukenDef.id; });
-    var cbId2 = 'satKoma_' + jukenDef.id;
-    var cb2 = document.createElement('input');
-    cb2.type='checkbox'; cb2.id=cbId2; cb2.className='koma-opt-cb'; cb2.checked=!!ex2;
-    var lbl2 = document.createElement('label');
-    lbl2.htmlFor=cbId2; lbl2.className='koma-opt-label';
-    lbl2.textContent = jukenDef.label + ' ' + jukenDef.time;
-    var jDiv = document.createElement('div');
-    jDiv.style.cssText='margin-top:8px;';
-    jDiv.appendChild(cb2); jDiv.appendChild(lbl2);
-    wrap.appendChild(jDiv);
-  }
+    // --- 受験特訓 ---
+    var jukenId = 'satKoma_juken_' + crKey;
+    var jukenEx = (komas||[]).find(function(k){ return k.satType==='juken' && k.classroom===cr; });
+    // 旧形式互換
+    if(!jukenEx) jukenEx = (komas||[]).find(function(k){ return k.satType==='juken' && !k.classroom; });
+    var jukenRow = document.createElement('div');
+    jukenRow.style.cssText = 'display:flex;align-items:center;gap:6px;';
+    var jukenCb = document.createElement('input');
+    jukenCb.type='checkbox'; jukenCb.id=jukenId; jukenCb.className='koma-opt-cb'; jukenCb.checked=!!jukenEx;
+    jukenCb.dataset.cr = cr; jukenCb.dataset.satType = 'juken'; jukenCb.dataset.time = '19:00〜21:30';
+    var jukenLbl = document.createElement('label');
+    jukenLbl.htmlFor=jukenId; jukenLbl.className='koma-opt-label';
+    jukenLbl.textContent = '受験特訓 19:00〜21:30';
+    jukenRow.appendChild(jukenCb); jukenRow.appendChild(jukenLbl);
+    secDiv.appendChild(jukenRow);
+
+    wrap.appendChild(secDiv);
+  });
 }
 
 // 土曜コマのUI状態をkomasエントリとして取得
 function getSatKomasFromUI(){
-  return SAT_KOMA_DEF.filter(function(def){
-    var el = document.getElementById('satKoma_' + def.id);
-    return el && el.checked;
-  }).map(function(def){
-    var entry = {id: def.id, youbi: def.youbi, time: def.time, satType: def.satType};
-    // 平日振替：選択したコマ情報を付加
-    if(def.satType === 'hira'){
-      var sel = document.getElementById('satHiraKoma');
-      entry.hiraKoma = sel ? sel.value : '';
-    }
-    return entry;
+  var results = [];
+  var CRS = [['北久里浜','kita'],['久里浜','kuri']];
+  var SAT_TYPES = [
+    {key:'eiken',  satType:'eiken', time:'16:20〜17:10'},
+    {key:'sat1',   satType:'sat',   time:'17:15〜18:35'},
+    {key:'sat2',   satType:'sat',   time:'18:40〜20:00'},
+    {key:'hira',   satType:'hira',  time:''},
+    {key:'juken',  satType:'juken', time:'19:00〜21:30'}
+  ];
+  CRS.forEach(function(crPair){
+    var cr = crPair[0];
+    var crKey = crPair[1];
+    SAT_TYPES.forEach(function(def){
+      var cbId = 'satKoma_' + def.key + '_' + crKey;
+      var cb = document.getElementById(cbId);
+      if(!cb || !cb.checked) return;
+      var entry = {
+        id: def.satType + '_' + def.key + '_' + crKey,
+        satType: def.satType,
+        time: def.time,
+        youbi: '土'
+      };
+      // 平日振替：選択したコマ情報を付加（hiraKoma = 教室_曜日時刻）
+      if(def.satType === 'hira'){
+        var sel = document.getElementById('satHiraKoma_' + crKey);
+        entry.hiraKoma = sel ? sel.value : '';
+        // hiraKomaから時刻を取得（例: 北久里浜_月17:15〜18:35）
+        if(entry.hiraKoma){
+          var parts = entry.hiraKoma.split('_');
+          if(parts.length >= 2){
+            entry.time = parts[1].replace(/^[月火水木金土日]/, '');
+          }
+        }
+      }
+      // jukenは教室横断のためclassroomを付けない
+      // eiken/sat/hiraは所属教室固定（UIのセクション=教室）
+      if(def.satType !== 'juken'){
+        entry.classroom = cr;
+      }
+      results.push(entry);
+    });
   });
+  return results;
 }
 
 // ===== マスタ取得 =====
