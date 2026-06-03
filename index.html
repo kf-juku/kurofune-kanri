@@ -1435,6 +1435,7 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
         <input type="file" id="filesInputFile" accept="image/*" style="display:none">
         <button class="btn-secondary" id="btnFilesFile" style="font-size:13px;padding:8px 14px;">📁 ファイルを選択</button>
         <input type="file" id="filesInputCamera" accept="image/*" capture="environment" style="display:none">
+        <a id="btnFilesFolder" href="#" target="_blank" class="btn-secondary" style="font-size:13px;padding:8px 14px;text-decoration:none;display:none;">📂 フォルダを開く</a>
       </div>
 
       <!-- カメラビュー -->
@@ -4501,6 +4502,12 @@ function filesLoadThumbnails(m) {
   fetch(url, { method: 'POST', body: fd })
     .then(function(res){ return res.json(); })
     .then(function(data){
+      // フォルダURLボタンを更新
+      var btnFolder = document.getElementById('btnFilesFolder');
+      if (btnFolder && data.folderUrl) {
+        btnFolder.href = data.folderUrl;
+        btnFolder.style.display = '';
+      }
       if (!data.success || !data.files || data.files.length === 0) {
         wrap.innerHTML = '<div style="font-size:13px;color:var(--text-light);">添付ファイルはありません</div>';
         return;
@@ -8124,6 +8131,31 @@ function confirmEnrollProceed(){
   document.getElementById('enrollPopupOverlay').classList.remove('show');
   _enrollInquiryId = null;
   showToast(iq.name+'を会員登録しました 🎉');
+
+  // 入会書類アップロードの案内
+  setTimeout(function(){
+    var newMember = _members[_members.length - 1];
+    var msg = document.createElement('div');
+    msg.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#1e3a5f;color:#fff;border-radius:12px;padding:14px 20px;font-size:13px;line-height:1.7;z-index:9999;max-width:320px;box-shadow:0 4px 16px rgba(0,0,0,0.25);';
+    msg.innerHTML = '📎 <strong>入会書類（カウンセリングシート・コース申込書）をアップしてください</strong><br>'
+      + '<span style="font-size:12px;color:#93c5fd;">生徒カード → 「📎 ファイル」タブからアップできます</span><br>'
+      + '<div style="margin-top:10px;text-align:right;">'
+      + '<button id="enrollFileGuideBtn" style="background:var(--crimson);color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:12px;cursor:pointer;font-family:inherit;">今すぐアップする</button>'
+      + '&nbsp;<button id="enrollFileGuideDismiss" style="background:rgba(255,255,255,0.15);color:#fff;border:none;border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer;font-family:inherit;">後で</button>'
+      + '</div>';
+    document.body.appendChild(msg);
+
+    document.getElementById('enrollFileGuideDismiss').onclick = function(){ document.body.removeChild(msg); };
+    document.getElementById('enrollFileGuideBtn').onclick = function(){
+      document.body.removeChild(msg);
+      if(newMember){
+        var idx = _members.indexOf(newMember);
+        if(idx >= 0){ openDetail(idx); setTimeout(function(){ switchDetailTab('files'); }, 300); }
+      }
+    };
+    // 10秒で自動消去
+    setTimeout(function(){ if(msg.parentNode) document.body.removeChild(msg); }, 10000);
+  }, 800);
 }
 
 
