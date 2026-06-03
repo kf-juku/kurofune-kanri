@@ -1276,6 +1276,7 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
     <button class="detail-tab" onclick="switchDetailTab('attr')">🏷️ コース・受講コマ</button>
     <button class="detail-tab" onclick="switchDetailTab('edu')">💬 面談記録</button>
     <button class="detail-tab" onclick="switchDetailTab('score')">📊 成績</button>
+    <button class="detail-tab" onclick="switchDetailTab('files')">📎 ファイル</button>
   </div>
   <div class="detail-body">
     <!-- 基本情報 -->
@@ -1425,6 +1426,41 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
     <div class="detail-tab-panel" id="dtScore" style="padding:12px 16px;">
       <div id="dtScoreContent"><!-- JS描画 --></div>
     </div>
+
+    <!-- ファイルタブ -->
+    <div class="detail-tab-panel" id="dtFiles" style="padding:16px 20px;">
+      <!-- アップロードエリア -->
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
+        <button class="btn-secondary" id="btnFilesCam" style="font-size:13px;padding:8px 14px;">📷 カメラで撮影</button>
+        <input type="file" id="filesInputFile" accept="image/*" style="display:none">
+        <button class="btn-secondary" id="btnFilesFile" style="font-size:13px;padding:8px 14px;">📁 ファイルを選択</button>
+        <input type="file" id="filesInputCamera" accept="image/*" capture="environment" style="display:none">
+      </div>
+
+      <!-- カメラビュー -->
+      <div id="filesCameraArea" style="display:none;margin-bottom:12px;">
+        <video id="filesVideo" autoplay playsinline muted style="width:100%;max-width:400px;border-radius:8px;border:2px solid var(--crimson);background:#000;display:block;"></video>
+        <div style="display:flex;gap:8px;margin-top:8px;">
+          <button class="btn-primary" id="btnFilesSnap" style="font-size:13px;padding:8px 14px;">📸 シャッター</button>
+          <button class="btn-secondary" id="btnFilesCamCancel" style="font-size:13px;padding:8px 14px;">キャンセル</button>
+        </div>
+      </div>
+
+      <!-- プレビュー＋アップロードボタン -->
+      <div id="filesPreviewArea" style="display:none;margin-bottom:16px;">
+        <img id="filesPreview" src="" style="max-width:100%;max-height:200px;border-radius:8px;border:1px solid var(--border);display:block;margin-bottom:8px;">
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button class="btn-primary" id="btnFilesUpload" style="font-size:13px;padding:8px 18px;">⬆️ アップロード</button>
+          <span id="filesUploadStatus" style="font-size:12px;color:var(--text-light);"></span>
+        </div>
+      </div>
+
+      <!-- サムネイル一覧 -->
+      <div id="filesThumbnails" style="display:flex;flex-wrap:wrap;gap:10px;">
+        <div style="font-size:13px;color:var(--text-light);">読み込み中...</div>
+      </div>
+    </div>
+
   </div>
   <div class="detail-save-bar">
     <button class="btn-secondary" onclick="closeDetailGuarded()">閉じる</button>
@@ -2357,8 +2393,8 @@ function closeDetail(){
 }
 
 function switchDetailTab(tab){
-  var tabs=['basic','attr','edu','score'];
-  var panelIds={basic:'dtBasic',attr:'dtAttr',edu:'dtEdu',score:'dtScore'};
+  var tabs=['basic','attr','edu','score','files'];
+  var panelIds={basic:'dtBasic',attr:'dtAttr',edu:'dtEdu',score:'dtScore',files:'dtFiles'};
   tabs.forEach(function(t){
     var p=document.getElementById(panelIds[t]);
     if(p) p.classList.toggle('active',t===tab);
@@ -2369,6 +2405,7 @@ function switchDetailTab(tab){
   // 教育記録タブを開いたとき、今日の日付と履歴を初期化
   if(tab==='edu'   && _detailIdx!==null) initDetailEdu(_members[_detailIdx]);
   if(tab==='score' && _detailIdx!==null) renderScoreTab(_members[_detailIdx]);
+  if(tab==='files' && _detailIdx!==null) initFilesTab(_members[_detailIdx]);
 }
 
 function updateDetailGrade(){
@@ -4287,6 +4324,205 @@ function mergeMembersFromGas(gasStudents){
   });
 
   // ローカルにあってGASにない生徒はそのまま保持（削除しない）
+}
+
+
+// =====================================================
+// ファイルタブ（Gドライブ連携）
+// =====================================================
+var _filesStream = null;
+var _filesCompressedBase64 = null;
+var _filesCurrentMember = null;
+
+function initFilesTab(m) {
+  _filesCurrentMember = m;
+  _filesCompressedBase64 = null;
+
+  // ボタンイベント登録（重複防止）
+  var btnCam    = document.getElementById('btnFilesCam');
+  var btnFile   = document.getElementById('btnFilesFile');
+  var btnSnap   = document.getElementById('btnFilesSnap');
+  var btnCancel = document.getElementById('btnFilesCamCancel');
+  var btnUp     = document.getElementById('btnFilesUpload');
+  var inputFile = document.getElementById('filesInputFile');
+  var inputCam  = document.getElementById('filesInputCamera');
+
+  btnCam.onclick    = filesStartCamera;
+  btnFile.onclick   = function(){ inputFile.click(); };
+  inputFile.onchange= function(){ filesOnFileSelected(this); };
+  inputCam.onchange = function(){ filesOnFileSelected(this); };
+  btnSnap.onclick   = filesSnapshot;
+  btnCancel.onclick = filesStopCamera;
+  btnUp.onclick     = filesDoUpload;
+
+  // プレビューリセット
+  document.getElementById('filesPreviewArea').style.display = 'none';
+  document.getElementById('filesCameraArea').style.display  = 'none';
+
+  // サムネイル読み込み
+  filesLoadThumbnails(m);
+}
+
+function filesStartCamera() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    // PCカメラ非対応ならスマホ用inputにフォールバック
+    document.getElementById('filesInputCamera').click();
+    return;
+  }
+  navigator.mediaDevices.getUserMedia({
+    video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 960 } },
+    audio: false
+  }).then(function(stream) {
+    _filesStream = stream;
+    var video = document.getElementById('filesVideo');
+    video.srcObject = stream;
+    document.getElementById('filesCameraArea').style.display = 'block';
+    document.getElementById('filesPreviewArea').style.display = 'none';
+    _filesCompressedBase64 = null;
+  }).catch(function() {
+    // getUserMedia失敗時はファイル選択にフォールバック
+    document.getElementById('filesInputCamera').click();
+  });
+}
+
+function filesStopCamera() {
+  if (_filesStream) {
+    _filesStream.getTracks().forEach(function(t){ t.stop(); });
+    _filesStream = null;
+  }
+  document.getElementById('filesCameraArea').style.display = 'none';
+}
+
+function filesSnapshot() {
+  var video  = document.getElementById('filesVideo');
+  var canvas = document.createElement('canvas');
+  var w = video.videoWidth  || 1280;
+  var h = video.videoHeight || 960;
+  var MAX_W = 1200, MAX_H = 1600;
+  if (w > MAX_W || h > MAX_H) {
+    var ratio = Math.min(MAX_W / w, MAX_H / h);
+    w = Math.round(w * ratio);
+    h = Math.round(h * ratio);
+  }
+  canvas.width = w; canvas.height = h;
+  canvas.getContext('2d').drawImage(video, 0, 0, w, h);
+  var dataUrl = canvas.toDataURL('image/jpeg', 0.72);
+  _filesCompressedBase64 = dataUrl.split(',')[1];
+  document.getElementById('filesPreview').src = dataUrl;
+  document.getElementById('filesPreviewArea').style.display = 'block';
+  filesStopCamera();
+}
+
+function filesOnFileSelected(input) {
+  if (!input.files || !input.files[0]) return;
+  var file = input.files[0];
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var img = new Image();
+    img.onload = function() {
+      var canvas = document.createElement('canvas');
+      var MAX_W = 1200, MAX_H = 1600;
+      var w = img.width, h = img.height;
+      if (w > MAX_W || h > MAX_H) {
+        var ratio = Math.min(MAX_W / w, MAX_H / h);
+        w = Math.round(w * ratio);
+        h = Math.round(h * ratio);
+      }
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      var compressed = canvas.toDataURL('image/jpeg', 0.72);
+      _filesCompressedBase64 = compressed.split(',')[1];
+      document.getElementById('filesPreview').src = compressed;
+      document.getElementById('filesPreviewArea').style.display = 'block';
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function filesDoUpload() {
+  var url = getGasUrl();
+  if (!url) { showToast('GAS URLが設定されていません', true); return; }
+  if (!_filesCompressedBase64) { showToast('画像を選択してください', true); return; }
+  if (!_filesCurrentMember) return;
+
+  var m = _filesCurrentMember;
+  var folderName = (m.id || 'unknown') + '_' + (m.name || '');
+  var folderPath = 'members/' + folderName;
+  var dateStr = new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'}).replace(/\//g,'');
+  var fileName = dateStr + '_' + Date.now() + '.jpg';
+
+  var status = document.getElementById('filesUploadStatus');
+  var btn    = document.getElementById('btnFilesUpload');
+  btn.disabled = true;
+  status.textContent = 'アップロード中...';
+
+  var fd = new FormData();
+  fd.append('action',   'uploadToDrive');
+  fd.append('base64',   _filesCompressedBase64);
+  fd.append('fileName', fileName);
+  fd.append('folder',   folderPath);
+
+  fetch(url, { method: 'POST', body: fd })
+    .then(function(res){ return res.json(); })
+    .then(function(data){
+      if (data.success) {
+        status.textContent = '✅ 保存しました';
+        _filesCompressedBase64 = null;
+        document.getElementById('filesPreviewArea').style.display = 'none';
+        setTimeout(function(){ filesLoadThumbnails(m); }, 800);
+      } else {
+        status.textContent = '❌ ' + (data.error || '失敗');
+      }
+    })
+    .catch(function(e){
+      status.textContent = '❌ 通信エラー: ' + e.message;
+    })
+    .finally(function(){
+      btn.disabled = false;
+    });
+}
+
+function filesLoadThumbnails(m) {
+  var url = getGasUrl();
+  var wrap = document.getElementById('filesThumbnails');
+  if (!url || !m) {
+    wrap.innerHTML = '<div style="font-size:13px;color:var(--text-light);">GAS URLが未設定です</div>';
+    return;
+  }
+
+  var folderName = (m.id || 'unknown') + '_' + (m.name || '');
+  wrap.innerHTML = '<div style="font-size:13px;color:var(--text-light);">読み込み中...</div>';
+
+  var fd = new FormData();
+  fd.append('action',     'getFiles');
+  fd.append('folderPath', 'members/' + folderName);
+
+  fetch(url, { method: 'POST', body: fd })
+    .then(function(res){ return res.json(); })
+    .then(function(data){
+      if (!data.success || !data.files || data.files.length === 0) {
+        wrap.innerHTML = '<div style="font-size:13px;color:var(--text-light);">添付ファイルはありません</div>';
+        return;
+      }
+      wrap.innerHTML = '';
+      data.files.forEach(function(file){
+        var card = document.createElement('div');
+        card.style.cssText = 'width:120px;text-align:center;cursor:pointer;';
+        var thumb = file.thumbnailLink
+          ? '<img src="' + file.thumbnailLink.replace('=s220','=s160') + '" style="width:120px;height:90px;object-fit:cover;border-radius:6px;border:1px solid var(--border);">'
+          : '<div style="width:120px;height:90px;background:var(--bg);border-radius:6px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:24px;">📄</div>';
+        var name = file.name.length > 16 ? file.name.substring(0,14) + '…' : file.name;
+        card.innerHTML = '<a href="https://drive.google.com/file/d/' + file.id + '/view" target="_blank" style="text-decoration:none;">'
+          + thumb
+          + '<div style="font-size:11px;color:var(--text-light);margin-top:4px;">' + name + '</div>'
+          + '</a>';
+        wrap.appendChild(card);
+      });
+    })
+    .catch(function(){
+      wrap.innerHTML = '<div style="font-size:13px;color:var(--text-light);">読み込みに失敗しました</div>';
+    });
 }
 
 function saveOneStudentToGas(m){
