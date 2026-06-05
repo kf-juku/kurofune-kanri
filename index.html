@@ -4940,7 +4940,7 @@ function buildKomaTableHtml(defMap, komas, disabled, simpleMode){
         var def = defs.find(function(d){ return d.youbi===y && d.time===t; });
         if(def){
           var existing = komas.find(function(k){ return k.id===def.id; });
-          var checked = (!disabled && existing) ? 'checked' : '';
+          var checked = (!disabled && existing && !existing.online) ? 'checked' : '';
           col += '<td>'
             + '<input class="koma-cb" type="checkbox" id="koma_'+def.id+'" '+checked+dis+'>'
             + '<label class="koma-label" for="koma_'+def.id+'"' + (disabled?' style="opacity:0.3;cursor:default;"':'') + '>✓</label>';
