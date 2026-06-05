@@ -2487,7 +2487,7 @@ function checkKomaRules(members){
           return false;
         });
         if(!hasSat){
-          reasons.push('土曜演習①②または平日振替が未設定');
+          reasons.push('土曜演習①②または平日演習回が未設定');
         }
       }
       var onlineKomas = komas.filter(function(k){ return k.online; });
@@ -4906,7 +4906,7 @@ var SAT_KOMA_DEF = [
   {id:'sat_eiken', youbi:'土', time:'16:20〜17:10', satType:'eiken', label:'英検対策'},
   {id:'sat_sat1',  youbi:'土', time:'17:15〜18:35', satType:'sat',   label:'土曜演習①'},
   {id:'sat_sat2',  youbi:'土', time:'18:40〜20:00', satType:'sat',   label:'土曜演習②'},
-  {id:'sat_hira',  youbi:'',  time:'',              satType:'hira',  label:'平日振替'},
+  {id:'sat_hira',  youbi:'',  time:'',              satType:'hira',  label:'平日演習回'},
   {id:'sat_juken', youbi:'土', time:'19:00〜21:30', satType:'juken', label:'受験特訓'},
 ];
 
@@ -5035,8 +5035,8 @@ function getKomasFromUI(){
 }
 
 // 土曜コマUIを描画（教室別2セクション：北久里浜・久里浜）
-// 各教室に英検・土曜演習①②・平日振替・受験特訓を表示
-// hiraKomaの形式：「教室_曜日時刻」例: 北久里浜_月17:15〜18:35
+// 各教室に英検・土曜演習①②・平日演習回・受験特訓を表示
+// hiraKoma（平日演習回）の形式：「教室_曜日時刻」例: 北久里浜_月17:15〜18:35
 function renderSatKomaUI(komas, classroom){
   var wrap = document.getElementById('komaOptSatWrap');
   if(!wrap) return;
@@ -5081,7 +5081,7 @@ function renderSatKomaUI(komas, classroom){
     // --- 土曜演習グループ ---
     var grpLabel = document.createElement('div');
     grpLabel.style.cssText = 'font-size:10px;color:#64748b;margin:6px 0 4px;font-weight:600;';
-    grpLabel.textContent = '土曜演習（①②・平日振替のいずれか1つ）';
+    grpLabel.textContent = '土曜演習（①②・平日演習回のいずれか1つ）';
     secDiv.appendChild(grpLabel);
     var grpRow = document.createElement('div');
     grpRow.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:4px;';
@@ -5108,7 +5108,7 @@ function renderSatKomaUI(komas, classroom){
     sat2Lbl.textContent = '土曜演習② 18:40〜20:00';
     grpRow.appendChild(sat2Cb); grpRow.appendChild(sat2Lbl);
 
-    // 平日振替
+    // 平日演習回
     var hiraId = 'satKoma_hira_' + crKey;
     var hiraEx = (komas||[]).find(function(k){ return k.satType==='hira' && k.classroom===cr; });
     // 旧形式互換：classroomなしのhiraで所属教室が一致するもの
@@ -5118,10 +5118,10 @@ function renderSatKomaUI(komas, classroom){
     hiraCb.dataset.cr = cr; hiraCb.dataset.satType = 'hira';
     var hiraLbl = document.createElement('label');
     hiraLbl.htmlFor=hiraId; hiraLbl.className='koma-opt-label';
-    hiraLbl.textContent = '平日振替';
+    hiraLbl.textContent = '平日演習回';
     grpRow.appendChild(hiraCb); grpRow.appendChild(hiraLbl);
 
-    // 平日振替プルダウン（教室+曜日+時刻）
+    // 平日演習回プルダウン（教室+曜日+時刻）
     var hiraSel = document.createElement('select');
     hiraSel.id = 'satHiraKoma_' + crKey;
     var hiraVal = hiraEx ? (hiraEx.hiraKoma || '') : '';
@@ -5190,7 +5190,7 @@ function getSatKomasFromUI(){
         time: def.time,
         youbi: '土'
       };
-      // 平日振替：選択したコマ情報を付加（hiraKoma = 教室_曜日時刻）
+      // 平日演習回：選択したコマ情報を付加（hiraKoma = 教室_曜日時刻）
       if(def.satType === 'hira'){
         var sel = document.getElementById('satHiraKoma_' + crKey);
         entry.hiraKoma = sel ? sel.value : '';
@@ -5552,7 +5552,7 @@ function buildKomaSummary(m){
     parts.push('CA '+ca.map(function(k){ return k.youbi+(k.time?k.time.split('〜')[0]:''); }).join('・'));
   }
   // 土曜授業（satTypeで識別）
-  var satLabels = {eiken:'英検対策', sat:'土曜演習', hira:'平日振替', juken:'受験特訓'};
+  var satLabels = {eiken:'英検対策', sat:'土曜演習', hira:'平日演習回', juken:'受験特訓'};
   var satKomas = komas.filter(function(k){ return k.satType; });
   satKomas.forEach(function(k){
     var lbl = satLabels[k.satType] || k.satType;
@@ -5567,7 +5567,7 @@ function buildBulkCardKomaBadges(m){
   ensureBulkFilter();
   var komas = m.komas || [];
   var html = '';
-  var satLabels = {eiken:'英検対策', sat:'土曜演習', hira:'平日振替', juken:'受験特訓'};
+  var satLabels = {eiken:'英検対策', sat:'土曜演習', hira:'平日演習回', juken:'受験特訓'};
 
   komas.forEach(function(k){
     var t = k.time ? k.time.split('〜')[0] : '';
