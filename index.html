@@ -1466,7 +1466,7 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
   <div class="detail-save-bar">
     <button class="btn-secondary" onclick="closeDetailGuarded()">閉じる</button>
     <button class="btn-danger" onclick="openDeleteModal(_detailIdx)" style="margin-right:auto;">🗑️ 削除</button>
-    <button class="btn-primary" onclick="saveDetail()">💾 保存</button>
+    <button class="btn-primary" id="btnDetailSave" onclick="saveDetail()">💾 保存</button>
   </div>
 </div>
 
@@ -2576,9 +2576,15 @@ function saveDetail(){
   document.getElementById('detailHeadSub').textContent=(m.reading||'')+(m.grade?' / '+m.grade:'');
   updateDetailHeader();
   _detailIsDirty = false;
-  saveToCache(); saveOneStudentToGas(m);
+  saveToCache();
   renderList(); updateClassroomFilter();
-  showToast('保存しました');
+  // GAS保存完了を待ってからトースト（完了前のリロードで古いデータが返るのを防ぐ）
+  var _saveBtn = document.getElementById('btnDetailSave');
+  if(_saveBtn){ _saveBtn.disabled = true; _saveBtn.textContent = '⏳ 保存中...'; }
+  saveOneStudentToGas(m).then(function(){
+    showToast('保存しました');
+    if(_saveBtn){ _saveBtn.disabled = false; _saveBtn.textContent = '💾 保存'; }
+  });
 }
 
 
@@ -4310,10 +4316,15 @@ function mergeMembersFromGas(gasStudents){
   var gasMap = {};
   gasStudents.forEach(function(s){ if(s.id) gasMap[s.id] = s; });
 
+  // 最近保存した生徒IDは15秒間スキップ（レースコンディション対策）
+  var recentlySavedId = (window._lastSavedId && window._lastSavedAt && Date.now() - window._lastSavedAt < 15000)
+    ? window._lastSavedId : null;
+
   // GASにある生徒を更新 or 追加
   gasStudents.forEach(function(s){
     if(!s.id) return;
     if(s.id === editingId) return; // 編集中はスキップ
+    if(s.id === recentlySavedId) return; // 保存直後はスキップ（上書き防止）
     if(localMap[s.id]){
       // 既存生徒をGASの最新で更新（配列内の位置を保持）
       var idx = _members.indexOf(localMap[s.id]);
@@ -4534,14 +4545,27 @@ function filesLoadThumbnails(m) {
 
 function saveOneStudentToGas(m){
   var url=getGasUrl();
-  if(!url || !m) return;
+  if(!url || !m) return Promise.resolve();
   var fd=new FormData();
   fd.append('action','updateOneStudent');
   fd.append('student',JSON.stringify(m));
   window._memberSaving = true;
-  fetch(url,{method:'POST',body:fd})
-    .then(function(){ window._lastGasSync = Date.now(); window._memberSaving = false; })
-    .catch(function(e){ window._memberSaving = false; console.warn('[GAS] 1件保存失敗:', e); showToast('GAS保存に失敗しました', true); });
+  window._lastSavedId = m.id;
+  window._lastSavedAt = Date.now();
+  return fetch(url,{method:'POST',body:fd})
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      window._lastGasSync = Date.now();
+      window._memberSaving = false;
+      if(!data || !data.success){
+        showToast('GAS保存に失敗しました（' + (data&&data.error||'不明') + '）', true);
+      }
+    })
+    .catch(function(e){
+      window._memberSaving = false;
+      console.warn('[GAS] 1件保存失敗:', e);
+      showToast('GAS保存に失敗しました', true);
+    });
 }
 
 function saveToGas(){
