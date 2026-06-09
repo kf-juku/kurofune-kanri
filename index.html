@@ -1324,6 +1324,12 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
         </div>
       </div>
       <div class="d-section">
+        <div class="d-section-title">部活・習い事</div>
+        <div class="d-row single">
+          <div class="d-group"><input class="d-input" id="dClub" type="text" placeholder="例：サッカー、ピアノ"></div>
+        </div>
+      </div>
+      <div class="d-section">
         <div class="d-section-title">指導方針メモ</div>
         <div class="d-row single">
           <div class="d-group"><textarea class="d-textarea" id="dPolicyMemo" placeholder="この会員への指導方針・注意事項など（内部メモ）" style="min-height:100px;"></textarea></div>
@@ -2352,6 +2358,7 @@ function openDetail(idx){
   }
   document.getElementById('dStatus').value=m.status||'在籍';
 
+  document.getElementById('dClub').value=m.club||'';
   document.getElementById('dPolicyMemo').value=m.policyMemo||'';
   document.getElementById('dGradeAuto').textContent='';
   populateDetailSelect('dClassroom',loadMaster(KEY_CLS,DEFAULT_CLS),m.classroom);
@@ -2560,6 +2567,7 @@ function saveDetail(){
   m.parent      =document.getElementById('dParent').value.trim();
   m.phone       =document.getElementById('dPhone').value.trim();
   m.email       =document.getElementById('dEmail').value.trim();
+  m.club        =document.getElementById('dClub').value.trim();
   m.policyMemo  =document.getElementById('dPolicyMemo').value.trim();
   m.attrJuku    =document.getElementById('dAttrJuku').checked;
   m.attrCa      =document.getElementById('dAttrCa').checked;
