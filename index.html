@@ -2105,9 +2105,9 @@ function switchTab(tab){
               mergeMembersFromGas(data.students.map(normalizeStudent));
               saveToCache();
               renderList(); updateClassroomFilter(); renderTasks();
-              if(tab==='scoreInput') renderScoreInput();
+              if(tab==='scoreInput' && !hasUnsavedScoreInput()) renderScoreInput();
               if(tab==='scoreAnalysis') renderScoreAnalysis();
-              if(tab==='bulk') renderBulkCards();
+              if(tab==='bulk' && !hasUnsavedBulkInput()) renderBulkCards();
             }
           }).catch(function(){ showToast('GAS接続エラー：会員データを取得できませんでした', true); });
       }
@@ -2119,6 +2119,46 @@ function switchTab(tab){
   }
 }
 function cap(s){ return s.charAt(0).toUpperCase()+s.slice(1); }
+
+// ===== 編集中ガード（2026-06-11 GAS連携監査対応：sync応答の再描画が書きかけ入力を消すのを防ぐ） =====
+// 成績入力タブ：未保存の入力（初期描画値との差分）またはフォーカス中なら true
+function hasUnsavedScoreInput(){
+  var wrap = document.getElementById('siTableWrap');
+  if(!wrap) return false;
+  if(document.activeElement && wrap.contains(document.activeElement)) return true;
+  var inputs = wrap.querySelectorAll('input.score-input-bulk');
+  for(var i=0;i<inputs.length;i++){
+    if(inputs[i].value !== inputs[i].defaultValue) return true;
+  }
+  var sels = wrap.querySelectorAll('select.score-select-sm');
+  for(var j=0;j<sels.length;j++){
+    var s=sels[j], defIdx=0;
+    for(var k=0;k<s.options.length;k++){ if(s.options[k].defaultSelected){ defIdx=k; break; } }
+    if(s.selectedIndex !== defIdx) return true;
+  }
+  return false;
+}
+// 一括記録タブ：書きかけのメモ・面談・タスク入力またはフォーカス中なら true
+function hasUnsavedBulkInput(){
+  var el = document.getElementById('bulkCards');
+  if(!el) return false;
+  if(document.activeElement && el.contains(document.activeElement)) return true;
+  var tas = el.querySelectorAll('textarea');
+  for(var i=0;i<tas.length;i++){ if(tas[i].value !== tas[i].defaultValue) return true; }
+  var ins = el.querySelectorAll('input');
+  for(var j=0;j<ins.length;j++){
+    var inp = ins[j];
+    if(inp.type==='checkbox' || inp.type==='radio'){ if(inp.checked !== inp.defaultChecked) return true; }
+    else if(inp.value !== inp.defaultValue) return true;
+  }
+  var sels2 = el.querySelectorAll('select');
+  for(var m=0;m<sels2.length;m++){
+    var s2=sels2[m], d2=0;
+    for(var n=0;n<s2.options.length;n++){ if(s2.options[n].defaultSelected){ d2=n; break; } }
+    if(s2.selectedIndex !== d2) return true;
+  }
+  return false;
+}
 
 // ===== 一覧描画 =====
 // ===== 一覧フィルター状態 =====
@@ -6230,17 +6270,27 @@ function loadInquiriesFromCache(){
   // localStorageからfallback読み込み（起動直後の仮データ）
   try{ return JSON.parse(localStorage.getItem('sm_inquiries')||'[]'); }catch(e){ return []; }
 }
+// 問い合わせカードを編集中か（カード内フォーカス中 or 300msデバウンス保存の待機中）
+function isIqEditing(){
+  var ae = document.activeElement;
+  if(ae && ae.closest && ae.closest('.iq-card')) return true;
+  for(var k in _iqAutoSaveTimers){ if(_iqAutoSaveTimers[k] != null) return true; }
+  return false;
+}
+
 function loadInquiriesFromGas(callback){
   var url = getGasUrl();
   if(!url){ if(callback) callback(false); return; }
   // 保存中は取得をスキップ（保存直後のGAS古いデータ取得による上書き防止）
   if(window._iqSaving){ if(callback) callback(false); return; }
+  // 問い合わせカード編集中は取得をスキップ（renderInquiryの再描画で書きかけ入力が消えるのを防止）
+  if(isIqEditing()){ if(callback) callback(false); return; }
   fetch(url + '?action=getInquiries')
     .then(function(r){ return r.json(); })
     .then(function(data){
       if(data && data.inquiries){
-        // 再チェック（fetch中に保存が始まった場合はスキップ）
-        if(window._iqSaving){ if(callback) callback(false); return; }
+        // 再チェック（fetch中に保存・編集が始まった場合はスキップ）
+        if(window._iqSaving || isIqEditing()){ if(callback) callback(false); return; }
         _inquiries = data.inquiries;
         try{ localStorage.setItem('sm_inquiries', JSON.stringify(_inquiries)); }catch(e){}
         // IqTasksも受信して反映
@@ -7739,7 +7789,7 @@ function saveIqCardAuto(el){
   var cardId = card.id.replace('iqcard_','');
   if(!cardId) return;
   clearTimeout(_iqAutoSaveTimers[cardId]);
-  _iqAutoSaveTimers[cardId] = setTimeout(function(){ saveIqCard(cardId, true); }, 300);
+  _iqAutoSaveTimers[cardId] = setTimeout(function(){ delete _iqAutoSaveTimers[cardId]; saveIqCard(cardId, true); }, 300);
 }
 
 function saveIqCard(id, skipRender){
