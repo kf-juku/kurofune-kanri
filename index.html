@@ -764,7 +764,7 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
         <div class="filter-row">
           <span class="filter-label">ステータス</span>
           <button class="filter-chip active" data-fkey="status" data-fval="在籍" onclick="toggleListFilter(this)">在籍</button>
-          <button class="filter-chip" data-fkey="status" data-fval="休塾" onclick="toggleListFilter(this)">休塾</button>
+          <button class="filter-chip" data-fkey="status" data-fval="休会" onclick="toggleListFilter(this)">休会</button>
           <button class="filter-chip" data-fkey="status" data-fval="退会" onclick="toggleListFilter(this)">退会</button>
           <span style="margin-left:8px;border-left:1px solid #e5e7eb;padding-left:8px;">
             <button class="filter-chip" data-fkey="attr" data-fval="juku" onclick="toggleListFilter(this)">塾</button>
@@ -1305,8 +1305,7 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
               <option value="">（未設定）</option><option>男</option><option>女</option><option>その他</option>
             </select>
           </div>
-          <!-- ステータス・退会手続きはヘッダーに移動 -->
-          <input type="hidden" id="dStatus">
+          <div class="d-group"><label class="d-label">ステータス</label><select class="d-select" id="dStatus" onchange="saveDetail()"><option value="在籍">在籍</option><option value="休会">休会</option><option value="退会">退会</option></select></div>
 
         </div>
         <div class="d-row single">
@@ -1348,12 +1347,27 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
           <div class="attr-dates-row">
             <div class="d-group"><label class="d-label">入会日</label><input class="d-input" type="date" id="dJukuEnroll"></div>
             <div class="d-group">
-              <label class="d-label">退会日（在籍中は空欄）</label>
-              <input class="d-input" type="date" id="dJukuLeave" oninput="onJukuLeaveInput()">
-              <div style="display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap;">
-                <span style="font-size:11px;color:#6b7280;background:#f1f5f9;border-radius:4px;padding:2px 7px;">⚠️ 最終授業日を入力してください</span>
-                <input type="checkbox" id="dJukuLeaveConfirm" style="width:16px;height:16px;accent-color:#dc2626;" onchange="onJukuLeaveConfirm(this)">
-                <label for="dJukuLeaveConfirm" style="font-size:13px;font-weight:700;cursor:pointer;color:#92400e;">塾 退会確定（チェックでタスク生成）</label>
+              <label class="d-label">退会・休会手続き（日付＝最終授業日）</label>
+              <div style="display:flex;gap:8px;align-items:flex-start;">
+                <select class="d-select" id="dJukuProc" style="width:90px;flex:none;" onchange="onProcSelect('juku')">
+                  <option value="">なし</option>
+                  <option value="leave">退会</option>
+                  <option value="rest">休会</option>
+                </select>
+                <div id="dJukuLeaveWrap" style="display:none;flex:1;">
+                  <input class="d-input" type="date" id="dJukuLeave" oninput="onJukuLeaveInput()" title="最終授業日を入力してください">
+                  <div style="display:flex;align-items:center;gap:6px;margin-top:6px;">
+                    <input type="checkbox" id="dJukuLeaveConfirm" style="width:16px;height:16px;accent-color:#dc2626;" onchange="onJukuLeaveConfirm(this)">
+                    <label for="dJukuLeaveConfirm" style="font-size:13px;font-weight:700;cursor:pointer;color:#92400e;">退会確定（チェックでタスク生成）</label>
+                  </div>
+                </div>
+                <div id="dJukuRestWrap" style="display:none;flex:1;">
+                  <input class="d-input" type="date" id="dJukuRest" oninput="onJukuRestInput()" title="休会前最後の授業日を入力してください">
+                  <div style="display:flex;align-items:center;gap:6px;margin-top:6px;">
+                    <input type="checkbox" id="dJukuRestConfirm" style="width:16px;height:16px;accent-color:#d97706;" onchange="onJukuRestConfirm(this)">
+                    <label for="dJukuRestConfirm" style="font-size:13px;font-weight:700;cursor:pointer;color:#92400e;">休会確定（チェックでタスク生成）</label>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -1363,12 +1377,27 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
           <div class="attr-dates-row">
             <div class="d-group"><label class="d-label">入会日</label><input class="d-input" type="date" id="dCaEnroll"></div>
             <div class="d-group">
-              <label class="d-label">退会日（在籍中は空欄）</label>
-              <input class="d-input" type="date" id="dCaLeave" oninput="onCaLeaveInput()">
-              <div style="display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap;">
-                <span style="font-size:11px;color:#6b7280;background:#f1f5f9;border-radius:4px;padding:2px 7px;">⚠️ 最終授業日を入力してください</span>
-                <input type="checkbox" id="dCaLeaveConfirm" style="width:16px;height:16px;accent-color:#dc2626;" onchange="onCaLeaveConfirm(this)">
-                <label for="dCaLeaveConfirm" style="font-size:13px;font-weight:700;cursor:pointer;color:#92400e;">CA 退会確定（チェックでタスク生成）</label>
+              <label class="d-label">退会・休会手続き（日付＝最終授業日）</label>
+              <div style="display:flex;gap:8px;align-items:flex-start;">
+                <select class="d-select" id="dCaProc" style="width:90px;flex:none;" onchange="onProcSelect('ca')">
+                  <option value="">なし</option>
+                  <option value="leave">退会</option>
+                  <option value="rest">休会</option>
+                </select>
+                <div id="dCaLeaveWrap" style="display:none;flex:1;">
+                  <input class="d-input" type="date" id="dCaLeave" oninput="onCaLeaveInput()" title="最終授業日を入力してください">
+                  <div style="display:flex;align-items:center;gap:6px;margin-top:6px;">
+                    <input type="checkbox" id="dCaLeaveConfirm" style="width:16px;height:16px;accent-color:#dc2626;" onchange="onCaLeaveConfirm(this)">
+                    <label for="dCaLeaveConfirm" style="font-size:13px;font-weight:700;cursor:pointer;color:#92400e;">退会確定（チェックでタスク生成）</label>
+                  </div>
+                </div>
+                <div id="dCaRestWrap" style="display:none;flex:1;">
+                  <input class="d-input" type="date" id="dCaRest" oninput="onCaRestInput()" title="休会前最後の授業日を入力してください">
+                  <div style="display:flex;align-items:center;gap:6px;margin-top:6px;">
+                    <input type="checkbox" id="dCaRestConfirm" style="width:16px;height:16px;accent-color:#d97706;" onchange="onCaRestConfirm(this)">
+                    <label for="dCaRestConfirm" style="font-size:13px;font-weight:700;cursor:pointer;color:#92400e;">休会確定（チェックでタスク生成）</label>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -1543,7 +1572,7 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
         <div class="form-group" style="margin:0;">
           <label class="form-label">ステータス</label>
           <select class="form-select" id="addStatus">
-            <option value="在籍">在籍</option><option value="休塾">休塾</option><option value="退会">退会</option>
+            <option value="在籍">在籍</option><option value="休会">休会</option><option value="退会">退会</option>
           </select>
         </div>
         <div class="form-group" style="margin:0;">
@@ -1703,6 +1732,10 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
       <div class="form-group" style="margin:4px 0 0;">
         <label class="form-label">受講コマ</label>
         <div id="enrollKomaWrap" style="margin-top:4px;font-size:12px;color:#9ca3af;">教室を選択すると表示されます</div>
+      <div class="form-group" style="margin:4px 0 0;" id="enrollSatKomaGroup" style="display:none;">
+        <label class="form-label">🗓️ 土曜授業</label>
+        <div class="koma-opt-list" id="enrollSatKomaWrap"></div>
+      </div>
       </div>
 
 
@@ -1735,7 +1768,7 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
         <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px;align-items:center;">
           <span style="font-size:11px;color:#9ca3af;width:36px;flex-shrink:0;">状態</span>
           <button class="filter-chip active" id="atfStatus_在籍" onclick="toggleAddTaskFilter('status','在籍',this)">在籍</button>
-          <button class="filter-chip" id="atfStatus_休塾" onclick="toggleAddTaskFilter('status','休塾',this)">休塾</button>
+          <button class="filter-chip" id="atfStatus_休会" onclick="toggleAddTaskFilter('status','休会',this)">休会</button>
           <button class="filter-chip" id="atfStatus_退会" onclick="toggleAddTaskFilter('status','退会',this)">退会</button>
         </div>
         <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px;align-items:center;">
@@ -2104,6 +2137,7 @@ function switchTab(tab){
             if(data && data.students){
               mergeMembersFromGas(data.students.map(normalizeStudent));
               saveToCache();
+              checkAutoLeave(); // GASから来た退会日・休会日を即判定
               renderList(); updateClassroomFilter(); renderTasks();
               if(tab==='scoreInput' && !hasUnsavedScoreInput()) renderScoreInput();
               if(tab==='scoreAnalysis') renderScoreAnalysis();
@@ -2216,7 +2250,7 @@ function renderList(){
     return true;
   });
   document.getElementById('filterCount').textContent=filtered.length+'人';
-  var so={'在籍':0,'休塾':1,'退会':2};
+  var so={'在籍':0,'休会':1,'退会':2};
   var go={'小1':1,'小2':2,'小3':3,'小4':4,'小5':5,'小6':6,'中1':7,'中2':8,'中3':9,'高1':10,'高2':11,'高3':12};
   var sortEl=document.getElementById('listSortKey');
   var sortKey=sortEl?sortEl.value:'status_grade';
@@ -2263,9 +2297,9 @@ function renderList(){
     var ri=_members.indexOf(m);
     // コースクラス
     var ac=m.attrJuku&&m.attrCa?'attr-both':m.attrJuku?'attr-juku':m.attrCa?'attr-ca':'';
-    // 休塾はグレーアウト
-    var sc=m.status==='休塾'?'status-rest':'';
-    var bs=m.status==='休塾'?'<span class="badge badge-rest">休塾</span>':m.status==='退会'?'<span class="badge badge-leave">退会</span>':'<span class="badge badge-active">在籍</span>';
+    // 休会はグレーアウト
+    var sc=m.status==='休会'?'status-rest':'';
+    var bs=m.status==='休会'?'<span class="badge badge-rest">休会</span>':m.status==='退会'?'<span class="badge badge-leave">退会</span>':'<span class="badge badge-active">在籍</span>';
     var bg=m.grade?'<span class="badge badge-grade grade-'+esc(m.grade)+'">'+esc(m.grade)+'</span>':'';
     var jukuClsCls = m.classroom==='北久里浜'?'badge-cls-kk':m.classroom==='久里浜'?'badge-cls-kr':'';
     var ba=(m.attrJuku?'<span class="badge badge-juku '+jukuClsCls+'">塾</span>':'')+(m.attrCa?'<span class="badge badge-ca">CA</span>':'');
@@ -2291,6 +2325,16 @@ function renderList(){
         var _lm = (_ld.getMonth()+1), _lday = _ld.getDate();
         var _lvDisp = (_lm) + '/' + _lday;
         tlv = '<span class="badge" style="background:#fee2e2;color:#991b1b;">🚪 退会予定 '+_lvDisp+'</span>';
+      }
+    }
+    // 休会予定バッジ（jukuRest or caRestが入力済み・未到来・在籍ステータスのみ）
+    var _restDate = m.jukuRest || m.caRest || '';
+    if(_restDate && m.status === '在籍'){
+      var _rd = new Date(_restDate + 'T00:00:00');
+      var _rToday = new Date(); _rToday.setHours(0,0,0,0);
+      if(!isNaN(_rd) && _rd >= _rToday){
+        var _rvDisp = (_rd.getMonth()+1) + '/' + _rd.getDate();
+        tlv += '<span class="badge" style="background:#fef3c7;color:#92400e;">💤 休会予定 '+_rvDisp+'</span>';
       }
     }
     return '<div class="member-card '+sc+' '+ac+'">'
@@ -2382,18 +2426,6 @@ function openDetail(idx){
   document.getElementById('dGrade').value=m.grade||'';
   document.getElementById('dGender').value=m.gender||'';
   // 退会済み会員: dStatusに「退会」オプションを動的追加、「在籍に戻す」ボタンを表示
-  var dStatusEl = document.getElementById('dStatus');
-  var existingLeaveOpt = dStatusEl.querySelector('option[value="退会"]');
-  if(m.status === '退会'){
-    if(!existingLeaveOpt){
-      var opt = document.createElement('option');
-      opt.value = '退会'; opt.textContent = '退会';
-      dStatusEl.appendChild(opt);
-    }
-    dStatusEl.disabled = false; // 在籍に戻せるよう有効のまま
-  } else {
-    if(existingLeaveOpt) existingLeaveOpt.remove();
-  }
   document.getElementById('dStatus').value=m.status||'在籍';
 
   document.getElementById('dClub').value=m.club||'';
@@ -2415,6 +2447,17 @@ function openDetail(idx){
   document.getElementById('dJukuLeave').value=m.jukuLeave||'';
   document.getElementById('dCaEnroll').value=m.caEnroll||'';
   document.getElementById('dCaLeave').value=m.caLeave||'';
+  document.getElementById('dJukuRest').value=m.jukuRest||'';
+  document.getElementById('dCaRest').value=m.caRest||'';
+  // 確定チェックの状態復元（確定済みならチェック表示）
+  document.getElementById('dJukuLeaveConfirm').checked=!!m.jukuLeaveConfirmed;
+  document.getElementById('dCaLeaveConfirm').checked=!!m.caLeaveConfirmed;
+  document.getElementById('dJukuRestConfirm').checked=!!m.jukuRestConfirmed;
+  document.getElementById('dCaRestConfirm').checked=!!m.caRestConfirmed;
+  // 手続きプルダウン初期値（退会データ優先）
+  document.getElementById('dJukuProc').value = (m.jukuLeave||m.jukuLeaveConfirmed) ? 'leave' : ((m.jukuRest||m.jukuRestConfirmed) ? 'rest' : '');
+  document.getElementById('dCaProc').value   = (m.caLeave||m.caLeaveConfirmed)     ? 'leave' : ((m.caRest||m.caRestConfirmed)     ? 'rest' : '');
+  updateProcVisibility('juku'); updateProcVisibility('ca');
   toggleAttrDates('juku'); toggleAttrDates('ca');
   // 最初のタブに戻す
   switchDetailTab('basic');
@@ -2596,7 +2639,17 @@ function saveDetail(){
   m.birthdate   =document.getElementById('dBirthdate').value;
   m.grade       =document.getElementById('dGrade').value;
   m.gender      =document.getElementById('dGender').value;
-  m.status      =document.getElementById('dStatus').value;
+  var _newStatus = document.getElementById('dStatus').value;
+  // 休会→在籍の復帰時は休会日・休会確定フラグをクリア（過去日付による自動休会の再発動を防ぐ）
+  if(m.status === '休会' && _newStatus === '在籍'){
+    m.jukuRest = ''; m.caRest = '';
+    m.jukuRestConfirmed = false; m.caRestConfirmed = false;
+    var _jr = document.getElementById('dJukuRest'); if(_jr) _jr.value = '';
+    var _cr = document.getElementById('dCaRest');   if(_cr) _cr.value = '';
+    var _jrc = document.getElementById('dJukuRestConfirm'); if(_jrc) _jrc.checked = false;
+    var _crc = document.getElementById('dCaRestConfirm');   if(_crc) _crc.checked = false;
+  }
+  m.status      = _newStatus;
 
   m.classroom   =document.getElementById('dClassroom').value;
   // m.youbi廃止済み（komasで管理）
@@ -2613,6 +2666,8 @@ function saveDetail(){
   m.jukuLeave   =document.getElementById('dJukuLeave').value;
   m.caEnroll    =document.getElementById('dCaEnroll').value;
   m.caLeave     =document.getElementById('dCaLeave').value;
+  m.jukuRest    =document.getElementById('dJukuRest').value;
+  m.caRest      =document.getElementById('dCaRest').value;
   // 通常コマ（塾・CA）＋土曜コマを統合
   var normalKomas = getKomasFromUI();
   var satKomas    = getSatKomasFromUI();
@@ -3889,7 +3944,7 @@ function refreshAddTaskList(){
 
 function openAddTaskModal(){
   _addTaskFilter = { status: ['在籍'], attr: 'juku', grade: 'all' };
-  ['在籍','休塾','退会'].forEach(function(s){
+  ['在籍','休会','退会'].forEach(function(s){
     var b = document.getElementById('atfStatus_'+s);
     if(b) b.classList.toggle('active', s === '在籍');
   });
@@ -4114,21 +4169,30 @@ function renderTasks(){
 
     // 授業メモタスクタイプ
     if(item.type === 'memo'){
+      var _mparts = (item.r.content||'').split('\n');
+      var _mtitle = _mparts[0];
+      var _mmemo  = _mparts.slice(1).join('\n').trim();
       return '<div class="task-item'+(overdue?' overdue':'')+'" style="border-left-color:var(--amber);">'
         +cbHtml
         +buildDateBlock(item.r.due, overdue)
         +'<div class="task-item-body">'
-        +'<div class="task-item-name"><span style="font-size:10px;color:#c2410c;background:#ffedd5;padding:1px 5px;border-radius:3px;margin-right:4px;">問い合わせ対応</span>'+esc(item.r.content)+'</div>'
+        +'<div class="task-item-name">'+esc(_mtitle)+'</div>'
         +'<div class="task-item-meta" style="display:flex;align-items:center;gap:5px;margin-top:3px;">'
         +'<span class="task-item-student">👤 '+esc(item.name)+'</span>'
         +'</div>'
+        +(_mmemo ? '<div class="task-item-memo" style="margin-top:3px;">'+esc(_mmemo).replace(/\n/g,'<br>')+'</div>' : '')
         +'</div>'
         +'<button onclick="deleteMemoTask(\''+esc(item.memberId)+'\',\''+esc(item.r.id)+'\')" title="削除" style="background:none;border:none;color:#d1d5db;cursor:pointer;font-size:15px;padding:2px 4px;flex-shrink:0;" onmouseover="this.style.color=\'#ef4444\'" onmouseout="this.style.color=\'#d1d5db\'">🗑</button>'
         +'</div>';
     }
 
     // 問い合わせタイプ
-    var memoHtml2 = (item.r.memo||'') ? '<div class="task-item-memo" style="margin-top:3px;">'+esc(item.r.memo)+'</div>' : '';
+    var _iqparts = (item.r.content||'').split('\n');
+    var _iqtitle = _iqparts[0];
+    var _iqcmemo = _iqparts.slice(1).join('\n').trim();
+    var memoHtml2 = '';
+    if(_iqcmemo) memoHtml2 += '<div class="task-item-memo" style="margin-top:3px;">'+esc(_iqcmemo).replace(/\n/g,'<br>')+'</div>';
+    if(item.r.memo) memoHtml2 += '<div class="task-item-memo" style="margin-top:3px;">'+esc(item.r.memo)+'</div>';
     var clsBorder = item.r.classroom==='北久里浜' ? '#0284c7'
       : item.r.classroom==='久里浜' ? '#ea7920' : 'var(--amber)';
     var clsBadge = item.r.classroom==='北久里浜'
@@ -4140,7 +4204,7 @@ function renderTasks(){
       +cbHtml
       +buildDateBlock(item.r.due, overdue)
       +'<div class="task-item-body">'
-      +'<div class="task-item-name"><span style="font-size:10px;color:#c2410c;background:#ffedd5;padding:1px 5px;border-radius:3px;margin-right:4px;">問い合わせ対応</span>'+esc(item.r.content)+'</div>'
+      +'<div class="task-item-name"><span style="font-size:10px;color:#c2410c;background:#ffedd5;padding:1px 5px;border-radius:3px;margin-right:4px;">問い合わせ対応</span>'+esc(_iqtitle)+'</div>'
       +'<div class="task-item-meta" style="display:flex;align-items:center;gap:5px;margin-top:3px;">'
       +'<span class="task-item-student">👤 '+esc(item.name)+'</span>'
       +clsBadge
@@ -4339,6 +4403,7 @@ function loadFromGas(){
           _members = gasStudents;
         }
         saveToCache(); renderList(); updateClassroomFilter(); renderTasks();
+        checkAutoLeave(); // GASから来た退会日・休会日を即判定
         showToast('✅ '+_members.length+'人を読み込みました');
       } else { showToast('データが見つかりませんでした',true); }
     })
@@ -4746,6 +4811,14 @@ function normalizeStudent(m){
     phone:          m.phone || m.contact || '',  // contact → phone に統合
     parent:         m.parent         || '',
     email:          m.email          || '',
+    scores:         m.scores         || {},
+    leaveDate:      m.leaveDate      || '',
+    leaveConfirmed: !!m.leaveConfirmed,
+    jukuLeaveConfirmed: !!m.jukuLeaveConfirmed,
+    caLeaveConfirmed:   !!m.caLeaveConfirmed,
+    jukuRest: m.jukuRest || '', caRest: m.caRest || '',
+    jukuRestConfirmed: !!m.jukuRestConfirmed,
+    caRestConfirmed:   !!m.caRestConfirmed
 
   };
 }
@@ -5083,8 +5156,8 @@ function getKomasFromUI(){
 // 土曜コマUIを描画（教室別2セクション：北久里浜・久里浜）
 // 各教室に英検・土曜演習①②・平日演習回・受験特訓を表示
 // hiraKoma（平日演習回）の形式：「教室_曜日時刻」例: 北久里浜_月17:15〜18:35
-function renderSatKomaUI(komas, classroom){
-  var wrap = document.getElementById('komaOptSatWrap');
+function renderSatKomaUI(komas, classroom, wrapId){
+  var wrap = document.getElementById(wrapId || 'komaOptSatWrap');
   if(!wrap) return;
   wrap.innerHTML = '';
 
@@ -5259,6 +5332,40 @@ function getSatKomasFromUI(){
   return results;
 }
 
+// 任意のwrapId内の土曜コマチェックボックスからkomasエントリを取得（入会ポップアップ等で使用）
+function getSatKomasFromWrapId(wrapId){
+  var wrap = document.getElementById(wrapId);
+  if(!wrap) return [];
+  var results = [];
+  var CRS = [['北久里浜','kita'],['久里浜','kuri']];
+  var SAT_TYPES = [
+    {key:'eiken',  satType:'eiken', time:'16:20〜17:10'},
+    {key:'sat1',   satType:'sat',   time:'17:15〜18:35'},
+    {key:'sat2',   satType:'sat',   time:'18:40〜20:00'},
+    {key:'hira',   satType:'hira',  time:''},
+    {key:'juken',  satType:'juken', time:'19:00〜21:30'}
+  ];
+  CRS.forEach(function(crPair){
+    var cr = crPair[0], crKey = crPair[1];
+    SAT_TYPES.forEach(function(def){
+      var cb = wrap.querySelector('#satKoma_' + def.key + '_' + crKey);
+      if(!cb || !cb.checked) return;
+      var entry = { id: def.satType+'_'+def.key+'_'+crKey, satType: def.satType, time: def.time, youbi: '土' };
+      if(def.satType === 'hira'){
+        var sel = wrap.querySelector('#satHiraKoma_' + crKey);
+        entry.hiraKoma = sel ? sel.value : '';
+        if(entry.hiraKoma){
+          var parts = entry.hiraKoma.split('_');
+          if(parts.length >= 2) entry.time = parts[1].replace(/^[月火水木金土日]/, '');
+        }
+      }
+      if(def.satType !== 'juken') entry.classroom = cr;
+      results.push(entry);
+    });
+  });
+  return results;
+}
+
 // ===== マスタ取得 =====
 function getClassrooms(){ return loadMaster(KEY_CLS, DEFAULT_CLS); }
 function getYoubi(){ try{ return JSON.parse(localStorage.getItem('sm_youbi')||'[]'); }catch(e){ return []; } }
@@ -5275,7 +5382,9 @@ var TMPL_LABELS = {
   class1_ready:  '初回授業①日時確定時',
   class2_ready:  '初回授業②日時確定時',
   leave_juku:    '塾 退会時',
-  leave_ca:      'CA 退会時'
+  leave_ca:      'CA 退会時',
+  rest_juku:     '塾 休会時',
+  rest_ca:       'CA 休会時'
 };
 function renderTmplEditor_OBSOLETE_DO_NOT_USE(){
   // 旧実装（無効化済み）。renderTmplEditor() を使用してください。
@@ -6492,6 +6601,8 @@ function buildIqCard(iq){
     +(iq.enrolledToMember ? '<span style="font-size:11px;color:#16a34a;font-weight:700;margin-left:4px;">✓ 入会確約済</span>' : '')
     +'</div>'
     +'<div class="iq-top-row2">'
+    +'<span style="color:#f59e0b;font-size:11px;font-weight:700;" title="読みにくい名前の場合は入力してください">よみ</span>'
+    +'<input class="iq-inline-input" id="iqe_reading_'+iq.id+'" value="'+esc(iq.reading||'')+'" placeholder="読みにくい場合は入力" onblur="saveIqCardAuto(this)" style="width:160px;">'
     +'<span style="color:#9ca3af;font-size:13px;">👤</span>'
     +'<input class="iq-inline-input" id="iqe_parent_'+iq.id+'" value="'+esc(iq.parent||'')+'" placeholder="保護者名" onblur="saveIqCardAuto(this)" style="width:110px;">'
     +'<span style="color:#9ca3af;font-size:13px;">📞</span>'
@@ -6745,7 +6856,7 @@ function onIqClassDoneChange(id, num){
   var timeStr = getKomaStartTime(komaEl.value) || '';
   if(timeStr){
     var triggerKey = num===1 ? 'class1_ready' : 'class2_ready';
-    fireIqTaskTrigger(triggerKey, dateEl.value, timeStr, cls, sName);
+    fireIqTaskTrigger(triggerKey, dateEl.value, timeStr, cls, sName, '', undefined, iq ? (iq.grade||'') : '', iq ? (iq.reading||'') : '');
   }
   saveIqCard(id, true);
 }
@@ -6817,8 +6928,17 @@ function updateDetailHeader(){
   } else if(isLeavePending){
     var _ldDisp = (_ld.getMonth()+1) + '/' + _ld.getDate();
     badges += '<span class="badge" style="background:#fee2e2;color:#991b1b;">🚪 退会予定 '+_ldDisp+'</span>';
-  } else if(m.status === '休塾'){
-    badges += '<span class="badge badge-rest">休塾</span>';
+  } else if((function(){
+      var _restD = m.jukuRest || m.caRest || '';
+      if(!_restD || m.status !== '在籍') return false;
+      var _rd2 = new Date(_restD+'T00:00:00');
+      return !isNaN(_rd2) && _rd2 >= today;
+    })()){
+    var _restD2 = m.jukuRest || m.caRest || '';
+    var _rd3 = new Date(_restD2+'T00:00:00');
+    badges += '<span class="badge" style="background:#fef3c7;color:#92400e;">💤 休会予定 '+(_rd3.getMonth()+1)+'/'+_rd3.getDate()+'</span>';
+  } else if(m.status === '休会'){
+    badges += '<span class="badge badge-rest">休会</span>';
   } else {
     badges += '<span class="badge badge-active">在籍</span>';
   }
@@ -6876,7 +6996,7 @@ function onJukuLeaveConfirm(cb){
   // タスク発火
   var cls = m.classroom || '';
   var sName = m.name || '';
-  fireIqTaskTrigger('leave_juku', leaveDate, '', cls, sName);
+  fireIqTaskTrigger('leave_juku', leaveDate, '', cls, sName, '', undefined, m ? (m.grade||'') : '', m ? (m.reading||'') : '');
   m.jukuLeaveConfirmed = true;
   showToast('塾の退会タスクを生成しました。保存してください。');
   saveDetail();
@@ -6904,9 +7024,126 @@ function onCaLeaveConfirm(cb){
   // タスク発火
   var cls = m.classroom || '';
   var sName = m.name || '';
-  fireIqTaskTrigger('leave_ca', leaveDate, '', cls, sName);
+  fireIqTaskTrigger('leave_ca', leaveDate, '', cls, sName, '', undefined, m ? (m.grade||'') : '', m ? (m.reading||'') : '');
   m.caLeaveConfirmed = true;
   showToast('CAの退会タスクを生成しました。保存してください。');
+  saveDetail();
+}
+
+// ===== 塾・CA別 休会確定チェックボックス（退会と同ロジック） =====
+
+// 塾休会日入力時：休会日が空になったらチェックを外せるようにする（未確定の場合のみ）
+function onJukuRestInput(){
+  var m = _detailIdx !== null ? _members[_detailIdx] : null;
+  var cb = document.getElementById('dJukuRestConfirm');
+  if(!cb) return;
+  var val = document.getElementById('dJukuRest').value;
+  if(!val && !(m && m.jukuRestConfirmed)){
+    cb.checked = false;
+  }
+}
+
+// CA休会日入力時
+function onCaRestInput(){
+  var m = _detailIdx !== null ? _members[_detailIdx] : null;
+  var cb = document.getElementById('dCaRestConfirm');
+  if(!cb) return;
+  var val = document.getElementById('dCaRest').value;
+  if(!val && !(m && m.caRestConfirmed)){
+    cb.checked = false;
+  }
+}
+
+// 塾 休会確定チェック
+function onJukuRestConfirm(cb){
+  if(_detailIdx === null){ cb.checked = false; return; }
+  var m = _members[_detailIdx];
+  if(!m){ cb.checked = false; return; }
+  // 既に確定済みなら取り消し不可
+  if(m.jukuRestConfirmed){
+    cb.checked = true;
+    showToast('休会タスクは既に生成済みです', true);
+    return;
+  }
+  if(!cb.checked) return;
+  // 休会日未入力チェック
+  var restDate = document.getElementById('dJukuRest').value;
+  if(!restDate){
+    cb.checked = false;
+    showToast('休会前最後の授業日を入力してからチェックしてください', true);
+    return;
+  }
+  // タスク発火
+  var cls = m.classroom || '';
+  var sName = m.name || '';
+  fireIqTaskTrigger('rest_juku', restDate, '', cls, sName, '', undefined, m ? (m.grade||'') : '', m ? (m.reading||'') : '');
+  m.jukuRestConfirmed = true;
+  showToast('塾の休会タスクを生成しました。保存してください。');
+  saveDetail();
+}
+
+// CA 休会確定チェック
+function onCaRestConfirm(cb){
+  if(_detailIdx === null){ cb.checked = false; return; }
+  var m = _members[_detailIdx];
+  if(!m){ cb.checked = false; return; }
+  // 既に確定済みなら取り消し不可
+  if(m.caRestConfirmed){
+    cb.checked = true;
+    showToast('休会タスクは既に生成済みです', true);
+    return;
+  }
+  if(!cb.checked) return;
+  // 休会日未入力チェック
+  var restDate = document.getElementById('dCaRest').value;
+  if(!restDate){
+    cb.checked = false;
+    showToast('休会前最後の授業日を入力してからチェックしてください', true);
+    return;
+  }
+  // タスク発火
+  var cls = m.classroom || '';
+  var sName = m.name || '';
+  fireIqTaskTrigger('rest_ca', restDate, '', cls, sName, '', undefined, m ? (m.grade||'') : '', m ? (m.reading||'') : '');
+  m.caRestConfirmed = true;
+  showToast('CAの休会タスクを生成しました。保存してください。');
+  saveDetail();
+}
+
+// ===== 退会・休会手続きプルダウン =====
+
+// 表示切替のみ（データは変更しない。loadDetailからも呼ばれる）
+function updateProcVisibility(course){
+  var c = course==='juku';
+  var v = document.getElementById(c?'dJukuProc':'dCaProc').value;
+  document.getElementById(c?'dJukuLeaveWrap':'dCaLeaveWrap').style.display = (v==='leave')?'':'none';
+  document.getElementById(c?'dJukuRestWrap':'dCaRestWrap').style.display  = (v==='rest')?'':'none';
+}
+
+// プルダウン変更時：確定済みは変更不可。選択しなかった側の未確定データはクリア
+function onProcSelect(course){
+  var c = course==='juku';
+  var sel = document.getElementById(c?'dJukuProc':'dCaProc');
+  var m = _detailIdx!==null ? _members[_detailIdx] : null;
+  var leaveConfirmed = m && (c?m.jukuLeaveConfirmed:m.caLeaveConfirmed);
+  var restConfirmed  = m && (c?m.jukuRestConfirmed:m.caRestConfirmed);
+  if(sel.value!=='leave' && leaveConfirmed){
+    sel.value='leave'; updateProcVisibility(course);
+    showToast('退会確定済みのため変更できません', true); return;
+  }
+  if(sel.value!=='rest' && restConfirmed){
+    sel.value='rest'; updateProcVisibility(course);
+    showToast('休会確定済みのため変更できません', true); return;
+  }
+  if(sel.value!=='leave'){
+    document.getElementById(c?'dJukuLeave':'dCaLeave').value='';
+    document.getElementById(c?'dJukuLeaveConfirm':'dCaLeaveConfirm').checked=false;
+  }
+  if(sel.value!=='rest'){
+    document.getElementById(c?'dJukuRest':'dCaRest').value='';
+    document.getElementById(c?'dJukuRestConfirm':'dCaRestConfirm').checked=false;
+  }
+  updateProcVisibility(course);
   saveDetail();
 }
 
@@ -6986,7 +7223,7 @@ function onIqCardStepChange(id, step){
     if(done){
       if(rdate && rdate.value && rtime && rtime.value){
         clearApoWarning(id, 'report');
-        fireIqTaskTrigger('report_ready', rdate.value, rtime.value, cls, iq?(iq.name||''):'');
+        fireIqTaskTrigger('report_ready', rdate.value, rtime.value, cls, iq?(iq.name||''):'', '', undefined, iq?(iq.grade||''):'', iq?(iq.reading||''):'');
       } else {
         showApoWarning(id, 'report');
       }
@@ -7040,7 +7277,7 @@ function onIqCardStepChange(id, step){
     var s1time = document.getElementById('iqe_s1time_'+id);
     if(s1date && s1date.value && s1time && s1time.value){
       clearApoWarning(id, 'visit');
-      fireIqTaskTrigger('visit_ready', s1date.value, s1time.value, cls, sName);
+      fireIqTaskTrigger('visit_ready', s1date.value, s1time.value, cls, sName, '', undefined, iq ? (iq.grade||'') : '', iq ? (iq.reading||'') : '');
     } else {
       showApoWarning(id, 'visit');
     }
@@ -7290,7 +7527,13 @@ var DEFAULT_TASK_TEMPLATES = {
     { title:'退会月の確認・フォレスタDB解除', memo:'', offsetDays:0 },
     { title:'各システム解約', memo:'AIM@・ジュクマタグ', offsetDays:0 }
   ],
-  leave_ca: []
+  leave_ca: [],
+  rest_juku: [
+    { title:'休会処理の確認', memo:'', offsetDays:0 }
+  ],
+  rest_ca: [
+    { title:'休会処理の確認', memo:'', offsetDays:0 }
+  ]
 };
 
 function getTaskTemplates(trigger){
@@ -7342,7 +7585,7 @@ function saveTemplatesToGas(templates){
 
 // トリガー発火：アポ系（日時あり・教室あり）
 // extraMemo: タスクメモに追加する文字列（体験の教科情報など）
-function fireIqTaskTrigger(trigger, apoDtStr, apoTimeStr, classroom, studentName, extraMemo, trialIndex){
+function fireIqTaskTrigger(trigger, apoDtStr, apoTimeStr, classroom, studentName, extraMemo, trialIndex, studentGrade, studentReading){
   // アポ系トリガーは教室未設定だとテンプレートが両教室分通って重複生成されるためエラーにする
   var APO_TRIGGERS = ['trial_ready', 'visit_ready', 'report_ready'];
   if(APO_TRIGGERS.indexOf(trigger) >= 0 && !classroom){
@@ -7524,7 +7767,8 @@ function fireIqTaskTrigger(trigger, apoDtStr, apoTimeStr, classroom, studentName
       }
     }
     // タイトルに生徒名を付加（例：「【初回来訪】田中太郎」）
-    var title = studentName ? '【' + resolvedTitle + '】' + studentName : resolvedTitle;
+    var title = studentName ? '【' + resolvedTitle + '】' + studentName + (studentGrade ? '（' + studentGrade + '）' : '') : resolvedTitle;
+    var readingMemo = studentReading ? 'よみ：' + studentReading : '';
     var today = dateToStr(new Date());
 
     // ① 重複チェック: 同じトリガー・同じオフセット・同じ生徒・同じアポ日の未完了タスクがあればスキップ
@@ -7576,7 +7820,7 @@ function fireIqTaskTrigger(trigger, apoDtStr, apoTimeStr, classroom, studentName
         date: today,
         type: 'memo',
         label: 'other',
-        content: title + (tmpl.memo ? '\n' + tmpl.memo : '') + (extraMemo ? '\n' + extraMemo : ''),
+        content: title + (readingMemo ? '\n' + readingMemo : '') + (tmpl.memo ? '\n' + tmpl.memo : '') + (extraMemo ? '\n' + extraMemo : ''),
         isTask: true,
         taskDone: false,
         due: due || '',
@@ -7601,7 +7845,7 @@ function fireIqTaskTrigger(trigger, apoDtStr, apoTimeStr, classroom, studentName
         date: today,
         studentName: studentName || '',
         content: title,
-        memo: (tmpl.memo || '') + (extraMemo ? '\n' + extraMemo : ''),
+        memo: (readingMemo ? readingMemo + '\n' : '') + (tmpl.memo || '') + (extraMemo ? '\n' + extraMemo : ''),
         isTask: true,
         taskDone: false,
         due: due || '',
@@ -7629,7 +7873,7 @@ function fireIqTaskTrigger(trigger, apoDtStr, apoTimeStr, classroom, studentName
       leave:         { category: '問い合わせ対応', taskType: '授業外' }
     };
     var _triggerMeta = _IQ_TRIGGER_MAP[trigger] || { category: '問い合わせ対応', taskType: '授業外' };
-    var _fullMemo = [tmpl.memo, extraMemo].filter(Boolean).join('\n');
+    var _fullMemo = [readingMemo, tmpl.memo, extraMemo].filter(Boolean).join('\n');
     if(url) postTaskToManager(title, _fullMemo, due, _triggerMeta.category, trigger, typeof newIqId!=='undefined'?newIqId:null, studentName, classroom||'', _triggerMeta.taskType);
   });
 }
@@ -7666,6 +7910,10 @@ function renderEnrollKoma(){
   var attrJuku = document.getElementById('enrollAttrJuku') && document.getElementById('enrollAttrJuku').checked;
   var attrCa   = document.getElementById('enrollAttrCa')   && document.getElementById('enrollAttrCa').checked;
   renderKomaForWrap('enrollKomaWrap', cls, attrJuku, attrCa, []);
+  // 土曜コマ（塾コースがONの場合のみ表示）
+  var satGrp = document.getElementById('enrollSatKomaGroup');
+  if(satGrp) satGrp.style.display = (attrJuku && cls) ? '' : 'none';
+  if(attrJuku && cls) renderSatKomaUI([], cls, 'enrollSatKomaWrap');
 }
 function renderAddKoma(){
   var cls = document.getElementById('addClassroom') ? document.getElementById('addClassroom').value : '';
@@ -7835,6 +8083,7 @@ function saveIqCard(id, skipRender){
   };
   var wasEnrolled = iq.enrolledToMember;
   iq.name      = (document.getElementById('iqe_name_'+id).value||'').trim();
+  iq.reading   = (document.getElementById('iqe_reading_'+id) ? document.getElementById('iqe_reading_'+id).value : '') || '';
   iq.grade     = document.getElementById('iqe_grade_'+id).value;
   iq.classroom = document.getElementById('iqe_classroom_'+id).value;
   iq.parent    = (document.getElementById('iqe_parent_'+id).value||'').trim();
@@ -7859,7 +8108,7 @@ function saveIqCard(id, skipRender){
       var prevVisit = (iq._prevSteps && iq._prevSteps.visit) || {};
       if(!prevVisit.done || !prevVisit.date || !prevVisit.time){
         clearApoWarning(id, 'visit');
-        fireIqTaskTrigger('visit_ready', steps.visit.date, steps.visit.time, iq.classroom||'', iq.name||'');
+        fireIqTaskTrigger('visit_ready', steps.visit.date, steps.visit.time, iq.classroom||'', iq.name||'', '', undefined, iq.grade||'', iq.reading||'');
       }
     }
     // 報告: チェック済みかつ日付・時刻が揃ったとき
@@ -7867,7 +8116,7 @@ function saveIqCard(id, skipRender){
       var prevReport = (iq._prevReport) || {};
       if(!prevReport.done || !prevReport.date || !prevReport.time){
         clearApoWarning(id, 'report');
-        fireIqTaskTrigger('report_ready', report.date, report.time, iq.classroom||'', iq.name||'');
+        fireIqTaskTrigger('report_ready', report.date, report.time, iq.classroom||'', iq.name||'', '', undefined, iq.grade||'', iq.reading||'');
       }
     }
     // 体験: 各trialでチェック済みかつ日付・時刻が揃ったとき
@@ -7884,7 +8133,7 @@ function saveIqCard(id, skipRender){
           var prevHasDt = !!(prev.date && prev.time);
           if(!prevDone || !prevHasDt){
             clearTrialApoWarning(id, i);
-            fireIqTaskTrigger('trial_ready', t.date, t.time, iq.classroom||'', iq.name||'', [t.subject, t.note].filter(Boolean).join(' / '), i);
+            fireIqTaskTrigger('trial_ready', t.date, t.time, iq.classroom||'', iq.name||'', [t.subject, t.note].filter(Boolean).join(' / '), i, iq.grade||'', iq.reading||'');
           }
         } else {
           showTrialApoWarning(id, i);
@@ -7999,7 +8248,7 @@ function openEnrollPopup(iq){
   document.getElementById('enrollPopupName').textContent = iq.name||'（名前未入力）';
   // 問い合わせ情報を引き継ぎ
   document.getElementById('enrollName').value       = iq.name||'';
-  document.getElementById('enrollReading').value    = '';
+  document.getElementById('enrollReading').value    = iq.reading||'';
   document.getElementById('enrollParent').value     = iq.parent||'';
   document.getElementById('enrollContact').value    = iq.contact||'';
   document.getElementById('enrollSchool').value     = '';
@@ -8177,7 +8426,7 @@ function confirmEnrollProceed(){
     targetSchool: (document.getElementById('enrollTargetSchool').value||'').trim(),
     birthdate:'', policyMemo:'',
     jukuEnroll: document.getElementById('enrollDate').value,
-    komas:             getKomasFromWrap('enrollKomaWrap'),
+    komas:             getKomasFromWrap('enrollKomaWrap').concat(getSatKomasFromWrapId('enrollSatKomaWrap')),
     lessonDates:       getLessonDates('enrollLessonDates'),
     enrollRoute:       document.getElementById('enrollRoute') ? document.getElementById('enrollRoute').value : '',
     jukuLeave:'', caEnroll: document.getElementById('enrollAttrCa').checked ? document.getElementById('enrollDate').value : '', caLeave:'',
@@ -8206,8 +8455,10 @@ function confirmEnrollProceed(){
   var _enrollCls  = m.classroom || '';
   var _enrollName = m.name || '';
   var _enrollDate = m.jukuEnroll || m.caEnroll || '';
-  if(m.attrJuku) fireIqTaskTrigger('enrolled_juku', _enrollDate, '', _enrollCls, _enrollName);
-  if(m.attrCa)   fireIqTaskTrigger('enrolled_ca',   _enrollDate, '', _enrollCls, _enrollName);
+  var _enrollGrade = m.grade || iq.grade || '';
+  var _enrollReading = m.reading || iq.reading || '';
+  if(m.attrJuku) fireIqTaskTrigger('enrolled_juku', _enrollDate, '', _enrollCls, _enrollName, '', undefined, _enrollGrade, _enrollReading);
+  if(m.attrCa)   fireIqTaskTrigger('enrolled_ca',   _enrollDate, '', _enrollCls, _enrollName, '', undefined, _enrollGrade, _enrollReading);
   document.getElementById('enrollPopupOverlay').classList.remove('show');
   _enrollInquiryId = null;
   showToast(iq.name+'を会員登録しました 🎉');
@@ -8578,7 +8829,9 @@ var TMPL_TRIGGER_LABELS = {
   class1_ready: '初回授業①',
   class2_ready: '初回授業②',
   leave_juku:   '退会（塾）',
-  leave_ca:     '退会（CA）'
+  leave_ca:     '退会（CA）',
+  rest_juku:    '休会（塾）',
+  rest_ca:      '休会（CA）'
 };
 
 var OFFSET_TYPE_LABELS = {
@@ -8892,14 +9145,40 @@ function checkAutoLeave(){
   var today = new Date(); today.setHours(0,0,0,0);
   var changed = false;
   (_members||[]).forEach(function(m){
-    if((m.status==='在籍'||m.status==='休塾') && m.leaveDate){
-      var ld = new Date(m.leaveDate + 'T00:00:00');
-      if(!isNaN(ld) && ld < today){
+    if(m.status==='在籍'||m.status==='休会'){
+      // jukuLeave / caLeave のうち入力済みの日付が今日以前なら退会に変更
+      var jld = m.jukuLeave ? new Date(m.jukuLeave + 'T00:00:00') : null;
+      var cld = m.caLeave   ? new Date(m.caLeave   + 'T00:00:00') : null;
+      var jPast = jld && !isNaN(jld) && jld < today;
+      var cPast = cld && !isNaN(cld) && cld < today;
+      // 両コース入会 → 両方過ぎたら退会。片方のみ入会 → その日付で判定
+      var hasJuku = !!m.attrJuku;
+      var hasCa   = !!m.attrCa;
+      var shouldLeave = false;
+      if(hasJuku && hasCa)       shouldLeave = jPast && cPast;
+      else if(hasJuku)           shouldLeave = jPast;
+      else if(hasCa)             shouldLeave = cPast;
+      else if(m.jukuLeave||m.caLeave) shouldLeave = (jPast||false) || (cPast||false);
+      if(shouldLeave){
         m.status = '退会';
-        // 在籍中コースの退会日が空なら最終授業日を自動セット
-        if(m.attrJuku && !m.jukuLeave) m.jukuLeave = m.leaveDate;
-        if(m.attrCa   && !m.caLeave)   m.caLeave   = m.leaveDate;
         changed = true;
+        return; // 退会が休会より優先
+      }
+      // ===== 自動休会（退会と同ロジック・在籍のみ対象） =====
+      if(m.status === '在籍'){
+        var jrd = m.jukuRest ? new Date(m.jukuRest + 'T00:00:00') : null;
+        var crd = m.caRest   ? new Date(m.caRest   + 'T00:00:00') : null;
+        var jrPast = jrd && !isNaN(jrd) && jrd < today;
+        var crPast = crd && !isNaN(crd) && crd < today;
+        var shouldRest = false;
+        if(hasJuku && hasCa)       shouldRest = jrPast && crPast;
+        else if(hasJuku)           shouldRest = jrPast;
+        else if(hasCa)             shouldRest = crPast;
+        else if(m.jukuRest||m.caRest) shouldRest = (jrPast||false) || (crPast||false);
+        if(shouldRest){
+          m.status = '休会';
+          changed = true;
+        }
       }
     }
   });
