@@ -1576,30 +1576,37 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
           <label class="form-label">教室 <span style="color:var(--crimson);">*</span></label>
           <select class="form-select" id="addClassroom" onchange="renderAddKoma()"></select>
         </div>
-        <div class="form-group" style="margin:0;">
-          <label class="form-label">ステータス</label>
-          <select class="form-select" id="addStatus">
-            <option value="在籍">在籍</option><option value="休会">休会</option><option value="退会">退会</option>
-          </select>
-        </div>
-        <div class="form-group" style="margin:0;">
-          <label class="form-label">入会日</label>
-          <input class="form-input" type="date" id="addEnrollDate">
-        </div>
-
+        <div class="form-group" style="margin:0;"></div>
       </div>
 
       <div class="form-group" style="margin:0;">
         <label class="form-label">コース</label>
         <div style="display:flex;gap:16px;margin-top:4px;">
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;"><input type="checkbox" id="addAttrJuku" style="accent-color:var(--crimson);width:16px;height:16px;" onchange="renderAddKoma()">🏫 進学塾</label>
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;"><input type="checkbox" id="addAttrCa" style="accent-color:var(--crimson);width:16px;height:16px;" onchange="renderAddKoma()">💻 CA</label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;"><input type="checkbox" id="addAttrJuku" style="accent-color:var(--crimson);width:16px;height:16px;" onchange="updateAddEnrollDates();renderAddKoma()">🏫 進学塾</label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;"><input type="checkbox" id="addAttrCa" style="accent-color:var(--crimson);width:16px;height:16px;" onchange="updateAddEnrollDates();renderAddKoma()">💻 CA</label>
         </div>
       </div>
-        <div class="form-group" style="margin:0;grid-column:1/-1;">
-          <label class="form-label">受講コマ</label>
-          <div id="addKomaWrap" style="margin-top:4px;font-size:12px;color:#9ca3af;">教室を選択すると表示されます</div>
+
+      <div id="addJukuEnrollWrap" style="display:none;background:#f0f9ff;border:1.5px solid #bae6fd;border-radius:8px;padding:10px 12px;">
+        <div style="font-size:11px;font-weight:700;color:#0369a1;margin-bottom:6px;">🏫 進学塾 在籍期間</div>
+        <div class="form-group" style="margin:0;">
+          <label class="form-label">入会日</label>
+          <input class="form-input" type="date" id="addJukuEnroll">
         </div>
+      </div>
+
+      <div id="addCaEnrollWrap" style="display:none;background:#f0fdf4;border:1.5px solid #bbf7d0;border-radius:8px;padding:10px 12px;">
+        <div style="font-size:11px;font-weight:700;color:#166534;margin-bottom:6px;">💻 CA 在籍期間</div>
+        <div class="form-group" style="margin:0;">
+          <label class="form-label">入会日</label>
+          <input class="form-input" type="date" id="addCaEnroll">
+        </div>
+      </div>
+
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">受講コマ</label>
+        <div id="addKomaWrap" style="margin-top:4px;font-size:12px;color:#9ca3af;">教室を選択すると表示されます</div>
+      </div>
 
     </div>
     <div class="modal-foot">
@@ -1717,10 +1724,7 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
             <option value="">未設定</option>
           </select>
         </div>
-        <div class="form-group" style="margin:0;">
-          <label class="form-label">入会日</label>
-          <input class="form-input" type="date" id="enrollDate">
-        </div>
+        <div class="form-group" style="margin:0;"></div>
         <div class="form-group" style="margin:0;grid-column:1/-1;">
           <label class="form-label">入会経路</label>
           <select class="form-select" id="enrollRoute">
@@ -1733,8 +1737,24 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
       <div class="form-group" style="margin:0;">
         <label class="form-label">コース</label>
         <div style="display:flex;gap:16px;margin-top:4px;">
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;"><input type="checkbox" id="enrollAttrJuku" style="accent-color:var(--crimson);width:16px;height:16px;" onchange="renderEnrollKoma()">🏫 進学塾</label>
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;"><input type="checkbox" id="enrollAttrCa" style="accent-color:var(--crimson);width:16px;height:16px;" onchange="renderEnrollKoma()">💻 CA</label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;"><input type="checkbox" id="enrollAttrJuku" style="accent-color:var(--crimson);width:16px;height:16px;" onchange="updateEnrollDates();renderEnrollKoma()">🏫 進学塾</label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;"><input type="checkbox" id="enrollAttrCa" style="accent-color:var(--crimson);width:16px;height:16px;" onchange="updateEnrollDates();renderEnrollKoma()">💻 CA</label>
+        </div>
+      </div>
+
+      <div id="enrollJukuEnrollWrap" style="display:none;background:#f0f9ff;border:1.5px solid #bae6fd;border-radius:8px;padding:10px 12px;">
+        <div style="font-size:11px;font-weight:700;color:#0369a1;margin-bottom:6px;">🏫 進学塾 在籍期間</div>
+        <div class="form-group" style="margin:0;">
+          <label class="form-label">入会日</label>
+          <input class="form-input" type="date" id="enrollJukuEnroll">
+        </div>
+      </div>
+
+      <div id="enrollCaEnrollWrap" style="display:none;background:#f0fdf4;border:1.5px solid #bbf7d0;border-radius:8px;padding:10px 12px;">
+        <div style="font-size:11px;font-weight:700;color:#166534;margin-bottom:6px;">💻 CA 在籍期間</div>
+        <div class="form-group" style="margin:0;">
+          <label class="form-label">入会日</label>
+          <input class="form-input" type="date" id="enrollCaEnroll">
         </div>
       </div>
       <div class="form-group" style="margin:4px 0 0;">
@@ -4300,10 +4320,11 @@ function openAddModal(){
   document.getElementById('addParent').value='';
   document.getElementById('addContact').value='';
   document.getElementById('addEmail').value='';
-  document.getElementById('addStatus').value='在籍';
   document.getElementById('addAttrJuku').checked=false;
   document.getElementById('addAttrCa').checked=false;
-  document.getElementById('addEnrollDate').value=dateToStr(new Date());
+  document.getElementById('addJukuEnroll').value=dateToStr(new Date());
+  document.getElementById('addCaEnroll').value=dateToStr(new Date());
+  updateAddEnrollDates();
   var classrooms=getClassrooms();
   var clsSel=document.getElementById('addClassroom');
   clsSel.innerHTML='<option value="">教室を選択</option>'+classrooms.map(function(c){ return '<option value="'+esc(c)+'">'+esc(c)+'</option>'; }).join('');
@@ -4313,20 +4334,32 @@ function openAddModal(){
   document.getElementById('addOverlay').classList.add('show');
   setTimeout(function(){ document.getElementById('addName').focus(); },100);
 }
+function updateAddEnrollDates(){
+  var juku = document.getElementById('addAttrJuku').checked;
+  var ca   = document.getElementById('addAttrCa').checked;
+  document.getElementById('addJukuEnrollWrap').style.display = juku ? '' : 'none';
+  document.getElementById('addCaEnrollWrap').style.display   = ca   ? '' : 'none';
+}
+function updateEnrollDates(){
+  var juku = document.getElementById('enrollAttrJuku').checked;
+  var ca   = document.getElementById('enrollAttrCa').checked;
+  document.getElementById('enrollJukuEnrollWrap').style.display = juku ? '' : 'none';
+  document.getElementById('enrollCaEnrollWrap').style.display   = ca   ? '' : 'none';
+}
 function closeAddModal(){ document.getElementById('addOverlay').classList.remove('show'); }
 function saveAdd(){
   var name=(document.getElementById('addName').value||'').trim();
   if(!name){ showToast('名前を入力してください',true); return; }
   var attrJuku=document.getElementById('addAttrJuku').checked;
   var attrCa=document.getElementById('addAttrCa').checked;
-  var enrollDate=document.getElementById('addEnrollDate').value||'';
+  if(!attrJuku && !attrCa){ showToast('コースを選択してください',true); return; }
   var m={
     id:genId(), name:name,
     reading:   (document.getElementById('addReading').value||'').trim(),
     grade:     document.getElementById('addGrade').value,
     gender:    document.getElementById('addGender').value||'',
     birthdate: document.getElementById('addBirthdate').value||'',
-    status:    document.getElementById('addStatus').value||'在籍',
+    status:    '在籍',
     classroom: document.getElementById('addClassroom').value,
     attrJuku:  attrJuku,
     attrCa:    attrCa,
@@ -4338,9 +4371,9 @@ function saveAdd(){
     youbi:     '',
     komas:      getKomasFromWrap('addKomaWrap'),
     policyMemo:'',
-    jukuEnroll: attrJuku ? enrollDate : '',
+    jukuEnroll: attrJuku ? (document.getElementById('addJukuEnroll').value||'') : '',
     jukuLeave:'',
-    caEnroll:   attrCa   ? enrollDate : '',
+    caEnroll:   attrCa   ? (document.getElementById('addCaEnroll').value||'')   : '',
     caLeave:'',
     interviews:[],memos:[]
   };
@@ -8398,8 +8431,11 @@ function openEnrollPopup(iq){
   // コース
   document.getElementById('enrollAttrJuku').checked = !!(iq.attrJuku);
   document.getElementById('enrollAttrCa').checked   = !!(iq.attrCa);
-  // 入会日
-  document.getElementById('enrollDate').value = dateToStr(new Date());
+  // 入会日（コース別）
+  var todayStr = dateToStr(new Date());
+  if(document.getElementById('enrollJukuEnroll')) document.getElementById('enrollJukuEnroll').value = todayStr;
+  if(document.getElementById('enrollCaEnroll'))   document.getElementById('enrollCaEnroll').value   = todayStr;
+  updateEnrollDates();
   var routeEl = document.getElementById('enrollRoute');
   if(routeEl) routeEl.value = iq.route||'';
   // 教室
@@ -8563,11 +8599,11 @@ function confirmEnrollProceed(){
     school:       (document.getElementById('enrollSchool').value||'').trim(),
     targetSchool: (document.getElementById('enrollTargetSchool').value||'').trim(),
     birthdate:'', policyMemo:'',
-    jukuEnroll: document.getElementById('enrollDate').value,
+    jukuEnroll: document.getElementById('enrollAttrJuku').checked ? (document.getElementById('enrollJukuEnroll').value||'') : '',
     komas:             getKomasFromWrap('enrollKomaWrap'),  // 土曜コマはKOMA_DEFに統合済み
     lessonDates:       getLessonDates('enrollLessonDates'),
     enrollRoute:       document.getElementById('enrollRoute') ? document.getElementById('enrollRoute').value : '',
-    jukuLeave:'', caEnroll: document.getElementById('enrollAttrCa').checked ? document.getElementById('enrollDate').value : '', caLeave:'',
+    jukuLeave:'', caEnroll: document.getElementById('enrollAttrCa').checked ? (document.getElementById('enrollCaEnroll').value||'') : '', caLeave:'',
     interviews:[], memos:[]
   };
   // 来訪アポの入会面談メモを面談履歴（入会時ラベル）に引き継ぎ
