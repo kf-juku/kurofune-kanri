@@ -5113,7 +5113,7 @@ function buildKomaTableHtml(defMap, komas, disabled, simpleMode){
           col += '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;">'
             + '<input class="koma-cb" type="checkbox" id="koma_'+def.id+'" '+satChecked+dis+'>'
             + '<label class="koma-label" for="koma_'+def.id+'"'+(disabled?' style="opacity:0.3;cursor:default;"':'')+'>✓</label>'
-            + '<span style="font-size:8.5px;background:'+badge.bg+';color:'+badge.color+';padding:0 3px;border-radius:3px;font-weight:700;white-space:nowrap;">'+badge.label+(def.satLabel?'<br>'+def.satLabel:'')+'</span>'
+            + '<span style="font-size:8.5px;background:'+badge.bg+';color:'+badge.color+';padding:0 3px;border-radius:3px;font-weight:700;white-space:normal;word-break:keep-all;text-align:center;line-height:1.2;">'+badge.label+(def.satLabel?'<br>'+def.satLabel:'')+'</span>'
             + '</div>';
         } else {
           // 平日コマ：通常/演習/online の3択トグル
@@ -8024,11 +8024,13 @@ function renderKomaForWrap(wrapId, cls, attrJuku, attrCa, komas){
   var html = '';
   if(attrJuku){
     html += '<div style="font-size:11px;font-weight:700;color:#6b7280;margin:6px 0 3px;">🏫 進学塾コマ</div>';
-    html += buildKomaTableHtml({'北久里浜': KOMA_DEF['北久里浜']||[], '久里浜': KOMA_DEF['久里浜']||[]}, komas||[], false);
+    var jukuDefMap = {}; if(KOMA_DEF[cls]) jukuDefMap[cls] = KOMA_DEF[cls];
+    html += buildKomaTableHtml(jukuDefMap, komas||[], false);
   }
   if(attrCa){
     html += '<div style="font-size:11px;font-weight:700;color:#6b7280;margin:6px 0 3px;">💻 CAコマ</div>';
-    html += buildKomaTableHtml({'北久里浜': CA_KOMA_DEF['北久里浜']||[], '久里浜': CA_KOMA_DEF['久里浜']||[]}, komas||[], false, true);
+    var caDefMap = {}; if(CA_KOMA_DEF[cls]) caDefMap[cls] = CA_KOMA_DEF[cls];
+    html += buildKomaTableHtml(caDefMap, komas||[], false, true);
   }
   if(!attrJuku && !attrCa) html = '<span style="color:#9ca3af;font-size:12px;">コースを選択してください</span>';
   wrap.innerHTML = html;
