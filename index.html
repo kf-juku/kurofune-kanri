@@ -337,6 +337,13 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
 .koma-alert-chip:hover { background:#fff0e5; }
 .koma-alert-reason { font-size:10px; font-weight:400; color:#9a3412; margin-left:2px; }
 .koma-table-disabled { opacity: 0.35; pointer-events: none; }
+/* 通常/演習/online 3択トグル */
+.koma-mode-radio { display: none; }
+.koma-mode-label { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 20px; border-radius: 4px; cursor: pointer; border: 1.5px solid var(--border); background: white; font-size: 9px; font-weight: 700; color: var(--text-light); transition: all 0.1s; }
+.koma-mode-radio:checked + .koma-mode-label { border-color: currentColor; }
+.koma-mode-normal.active, .koma-mode-radio:checked + .koma-mode-normal { background: var(--crimson); border-color: var(--crimson); color: white; }
+.koma-mode-enshuu.active, .koma-mode-radio:checked + .koma-mode-enshuu { background: #1d4ed8; border-color: #1d4ed8; color: white; }
+.koma-mode-online.active, .koma-mode-radio:checked + .koma-mode-online { background: #3b82f6; border-color: #3b82f6; color: white; }
 
 /* ===== 設定 ===== */
 .settings-panel { padding: 20px; max-width: 640px; }
@@ -1410,8 +1417,8 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
           <div class="koma-legend-item"><div class="koma-legend-dot" style="background:var(--crimson);"></div>対面</div>
           <div class="koma-legend-item"><span style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:14px;border-radius:4px;background:#2D8CFF"><svg width="10" height="10" viewBox="0 0 24 24" fill="white"><path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11l-4 4z"/></svg></span>Zoom（オンライン）</div>
         </div>
-        <div class="d-section-title" style="margin-top:14px;">🗓️ 土曜授業</div>
-        <div class="koma-opt-list" id="komaOptSatWrap"></div>
+        <!-- 土曜授業セクション廃止済み（v2.22〜）：KOMA_DEFに統合 -->
+        <div id="komaOptSatWrap" style="display:none;"></div>
         <div id="komaCaWrap"></div>
       </div>
     </div>
@@ -1732,10 +1739,8 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
       <div class="form-group" style="margin:4px 0 0;">
         <label class="form-label">受講コマ</label>
         <div id="enrollKomaWrap" style="margin-top:4px;font-size:12px;color:#9ca3af;">教室を選択すると表示されます</div>
-      <div class="form-group" style="margin:4px 0 0;" id="enrollSatKomaGroup" style="display:none;">
-        <label class="form-label">🗓️ 土曜授業</label>
-        <div class="koma-opt-list" id="enrollSatKomaWrap"></div>
-      </div>
+      <!-- enrollSatKomaGroup廃止済み（v2.22〜）：enrollKomaWrapのKOMA_DEFに土曜コマ統合 -->
+      <div id="enrollSatKomaGroup" style="display:none;"><div id="enrollSatKomaWrap"></div></div>
       </div>
 
 
@@ -2570,12 +2575,14 @@ function checkKomaRules(members){
       }
       if(isChugaku){
         var hasSat = komas.some(function(k){
+          if(k.satType === 'enshuu') return true;
+          // 旧形式互換
           if(k.satType === 'sat') return true;
           if(k.satType === 'hira') return !!(k.hiraKoma && k.hiraKoma.trim());
           return false;
         });
         if(!hasSat){
-          reasons.push('土曜演習①②または平日演習回が未設定');
+          reasons.push('演習回が未設定（中学生は必須）');
         }
       }
       var onlineKomas = komas.filter(function(k){ return k.online; });
@@ -2668,10 +2675,8 @@ function saveDetail(){
   m.caLeave     =document.getElementById('dCaLeave').value;
   m.jukuRest    =document.getElementById('dJukuRest').value;
   m.caRest      =document.getElementById('dCaRest').value;
-  // 通常コマ（塾・CA）＋土曜コマを統合
-  var normalKomas = getKomasFromUI();
-  var satKomas    = getSatKomasFromUI();
-  m.komas = normalKomas.concat(satKomas);
+  // 通常コマ（塾・CA）＋土曜コマを統合（getKomasFromUIに統合済み）
+  m.komas = getKomasFromUI();
   m.satOptions = []; // 廃止済み（後方互換のため空配列を残す）
   document.getElementById('detailHeadName').textContent=m.name;
   document.getElementById('detailHeadSub').textContent=(m.reading||'')+(m.grade?' / '+m.grade:'');
@@ -4985,6 +4990,10 @@ var KOMA_DEF = {
     {id:'kk_fri_1715', youbi:'金', time:'17:15〜18:35'},
     {id:'kk_fri_1840', youbi:'金', time:'18:40〜20:00'},
     {id:'kk_fri_2005', youbi:'金', time:'20:05〜21:25'},
+    {id:'kk_sat_1620', youbi:'土', time:'16:20〜17:10', satType:'eiken',  satLabel:'英検対策'},
+    {id:'kk_sat_1715', youbi:'土', time:'17:15〜18:35', satType:'enshuu', satLabel:'演習①'},
+    {id:'kk_sat_1840', youbi:'土', time:'18:40〜20:00', satType:'enshuu', satLabel:'演習②'},
+    {id:'kk_sat_juken',youbi:'土', time:'19:00〜21:30', satType:'juken',  satLabel:'受験特訓'},
   ],
   '久里浜': [
     {id:'kr_mon_1620', youbi:'月', time:'16:20〜17:10'},
@@ -4999,6 +5008,9 @@ var KOMA_DEF = {
     {id:'kr_fri_1715', youbi:'金', time:'17:15〜18:35'},
     {id:'kr_fri_1840', youbi:'金', time:'18:40〜20:00'},
     {id:'kr_fri_2005', youbi:'金', time:'20:05〜21:25'},
+    {id:'kr_sat_1715', youbi:'土', time:'17:15〜18:35', satType:'enshuu', satLabel:'演習①'},
+    {id:'kr_sat_1840', youbi:'土', time:'18:40〜20:00', satType:'enshuu', satLabel:'演習②'},
+    {id:'kr_sat_juken',youbi:'土', time:'19:00〜21:30', satType:'juken',  satLabel:'受験特訓'},
   ]
 };
 // ===== 受講コマ定義（CA） =====
@@ -5031,7 +5043,6 @@ var SAT_KOMA_DEF = [
 
 function buildKomaTableHtml(defMap, komas, disabled, simpleMode){
   var dis = disabled ? ' disabled' : '';
-  var sectionClass = disabled ? ' koma-section-disabled' : '';
   var CR_STYLE = {
     '北久里浜': 'background:#f0f9ff;border:1.5px solid #bae6fd;border-radius:8px;padding:8px;flex:1;min-width:0;',
     '久里浜':   'background:#fff7ed;border:1.5px solid #fed7aa;border-radius:8px;padding:8px;flex:1;min-width:0;'
@@ -5040,16 +5051,23 @@ function buildKomaTableHtml(defMap, komas, disabled, simpleMode){
     '北久里浜': 'font-size:11px;font-weight:700;color:#0369a1;margin-bottom:6px;',
     '久里浜':   'font-size:11px;font-weight:700;color:#c2410c;margin-bottom:6px;'
   };
+  // satTypeラベル・色定義
+  var SAT_BADGE = {
+    'eiken':  {bg:'#FAEEDA', color:'#854F0B', label:'英検'},
+    'enshuu': {bg:'#dbeafe', color:'#1d4ed8', label:'演習'},
+    'juken':  {bg:'#ede9fe', color:'#6d28d9', label:'特訓'}
+  };
   var cols = '';
   ['北久里浜','久里浜'].forEach(function(cls){
     var defs = defMap[cls];
     if(!defs || !defs.length) return;
+    // 曜日・時間を重複なく収集（土曜コマのsatLabelも含む）
     var youbis = [];
     defs.forEach(function(d){ if(youbis.indexOf(d.youbi)<0) youbis.push(d.youbi); });
     var times = [];
     defs.forEach(function(d){ if(times.indexOf(d.time)<0) times.push(d.time); });
     var col = '<div style="' + CR_STYLE[cls] + '">';
-    col += '<div class="koma-section-label' + sectionClass + '" style="' + CR_LABEL_STYLE[cls] + '">【' + cls + '】</div>';
+    col += '<div style="' + CR_LABEL_STYLE[cls] + '">【' + cls + '】</div>';
     col += '<table class="koma-table' + (disabled?' koma-table-disabled':'') + '" style="width:100%;"><thead><tr><th>時間</th>';
     youbis.forEach(function(y){ col += '<th>' + y + '</th>'; });
     col += '</tr></thead><tbody>';
@@ -5057,21 +5075,69 @@ function buildKomaTableHtml(defMap, komas, disabled, simpleMode){
       col += '<tr><td class="koma-time">' + t + '</td>';
       youbis.forEach(function(y){
         var def = defs.find(function(d){ return d.youbi===y && d.time===t; });
-        if(def){
-          var existing = komas.find(function(k){ return k.id===def.id; });
-          var checked = (!disabled && existing && !existing.online) ? 'checked' : '';
-          col += '<td>'
-            + '<input class="koma-cb" type="checkbox" id="koma_'+def.id+'" '+checked+dis+'>'
-            + '<label class="koma-label" for="koma_'+def.id+'"' + (disabled?' style="opacity:0.3;cursor:default;"':'') + '>✓</label>';
-          if(!simpleMode){
-            var online = (!disabled && existing && existing.online) ? 'checked' : '';
-            col += '<input class="koma-online-cb" type="checkbox" id="komaol_'+def.id+'" '+online+dis+'>'
-              + '<label class="koma-online-label" for="komaol_'+def.id+'"' + (disabled?' style="opacity:0.3;cursor:default;"':'') + '><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11l-4 4z"/></svg></label>';
-          }
-          col += '</td>';
-        } else {
-          col += '<td style="background:#f9fafb;"></td>';
+        if(!def){ col += '<td style="background:#f9fafb;"></td>'; return; }
+        var isSat = !!def.satType;
+        var existing = komas.find(function(k){ return k.id===def.id; });
+        // enshuu判定：既存データにsatType:hira/satも受容
+        if(!existing && def.satType === 'enshuu'){
+          existing = komas.find(function(k){
+            if(k.satType === 'enshuu' && k.youbi === def.youbi && k.time === def.time) return true;
+            // 旧形式互換：sat+同じ時間帯
+            if(k.satType === 'sat' && k.youbi === '土' && k.time === def.time) return true;
+            // 旧形式互換：hira（平日演習回） - 同じ教室・曜日・時刻で一致
+            if(k.satType === 'hira') return false; // 平日コマは別判定
+            return false;
+          });
         }
+        col += '<td style="padding:2px;">';
+        if(isSat){
+          // 土曜コマ：チェックのみ（通常/演習トグルなし）
+          var badge = SAT_BADGE[def.satType] || {bg:'#f3f4f6',color:'#374151',label:def.satType};
+          var satChecked = (!disabled && existing) ? 'checked' : '';
+          col += '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;">'
+            + '<input class="koma-cb" type="checkbox" id="koma_'+def.id+'" '+satChecked+dis+'>'
+            + '<label class="koma-label" for="koma_'+def.id+'"'+(disabled?' style="opacity:0.3;cursor:default;"':'')+'>✓</label>'
+            + '<span style="font-size:8.5px;background:'+badge.bg+';color:'+badge.color+';padding:0 3px;border-radius:3px;font-weight:700;white-space:nowrap;">'+badge.label+(def.satLabel?'<br>'+def.satLabel:'')+'</span>'
+            + '</div>';
+        } else {
+          // 平日コマ：通常/演習/online の3択トグル
+          // モード判定
+          var existEn = komas.find(function(k){
+            return k.satType === 'enshuu' && k.youbi === def.youbi && k.time === def.time && k.classroom === cls;
+          });
+          // 旧形式hira互換：hiraKomaが一致するものをenshuu扱い
+          if(!existEn){
+            existEn = komas.find(function(k){
+              if(k.satType !== 'hira') return false;
+              var hv = k.hiraKoma || '';
+              if(hv.indexOf('_') !== -1){ hv = hv.split('_').slice(1).join('_'); }
+              return hv === (def.youbi + def.time);
+            });
+          }
+          var isOnline  = !disabled && existing && existing.online;
+          var isEnshuu  = !disabled && !!existEn && !existEn.online;
+          var isNormal  = !disabled && !!existing && !existing.online && !existEn;
+          // radio値
+          var modeVal = isOnline ? 'online' : (isEnshuu ? 'enshuu' : (isNormal ? 'normal' : ''));
+          var rdName = 'komamode_'+def.id;
+          if(!simpleMode){
+            // input + label 構造（CSS :checked + label セレクタ動作に必須）
+            col += '<div style="display:flex;flex-direction:column;align-items:center;gap:1px;">'
+              + '<input type="radio" name="'+rdName+'" id="komamode_n_'+def.id+'" class="koma-mode-radio" value="normal"'+(modeVal==='normal'?' checked':'')+dis+'>'
+              + '<label class="koma-mode-label koma-mode-normal" for="komamode_n_'+def.id+'" title="通常">通</label>'
+              + '<input type="radio" name="'+rdName+'" id="komamode_e_'+def.id+'" class="koma-mode-radio" value="enshuu"'+(modeVal==='enshuu'?' checked':'')+dis+'>'
+              + '<label class="koma-mode-label koma-mode-enshuu" for="komamode_e_'+def.id+'" title="演習回">演</label>'
+              + '<input type="radio" name="'+rdName+'" id="komamode_o_'+def.id+'" class="koma-mode-radio" value="online"'+(modeVal==='online'?' checked':'')+dis+'>'
+              + '<label class="koma-mode-label koma-mode-online" for="komamode_o_'+def.id+'" title="オンライン"><svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11l-4 4z"/></svg></label>'
+              + '</div>';
+          } else {
+            // simpleMode（CAテーブル）: 従来通りチェックのみ
+            var checked = (!disabled && existing && !existing.online) ? 'checked' : '';
+            col += '<input class="koma-cb" type="checkbox" id="koma_'+def.id+'" '+checked+dis+'>'
+              + '<label class="koma-label ca-koma" for="koma_'+def.id+'"'+(disabled?' style="opacity:0.3;cursor:default;"':'')+'>✓</label>';
+          }
+        }
+        col += '</td>';
       });
       col += '</tr>';
     });
@@ -5088,7 +5154,7 @@ function renderKomaTable(m){
   var komas = m.komas || [];
   var attrJuku = !!(m.attrJuku || (document.getElementById('dAttrJuku') && document.getElementById('dAttrJuku').checked));
   var attrCa   = !!(m.attrCa   || (document.getElementById('dAttrCa')   && document.getElementById('dAttrCa').checked));
-  // 塾セクション
+  // 塾セクション（土曜コマも統合済み）
   var jukuHtml = '<div class="koma-course-header' + (!attrJuku?' koma-course-header-disabled':'') + '">🏫 進学塾コマ</div>';
   jukuHtml += buildKomaTableHtml(KOMA_DEF, komas, !attrJuku);
   jukuWrap.innerHTML = jukuHtml;
@@ -5098,35 +5164,37 @@ function renderKomaTable(m){
     caHtml += buildKomaTableHtml(CA_KOMA_DEF, komas, !attrCa, true);
     caWrap.innerHTML = caHtml;
   }
-  // 土曜授業UI（komasからsatTypeを持つものを抽出して描画）
-  renderSatKomaUI(komas, m.classroom || '');
+  // 土曜授業セクションを非表示（KOMA_DEFに統合）
+  var satWrap = document.getElementById('komaOptSatWrap');
+  var satTitle = document.querySelector('.d-section-title[data-sat]');
+  if(satWrap){ satWrap.style.display = 'none'; }
 }
 
 function refreshKomaTableDisabled(){
   var attrJuku = document.getElementById('dAttrJuku') && document.getElementById('dAttrJuku').checked;
   var attrCa   = document.getElementById('dAttrCa')   && document.getElementById('dAttrCa').checked;
-  // 塾テーブルのdisabled切り替え
+  // 塾テーブルのdisabled切り替え（平日=ラジオ、土曜=チェックボックス）
   ['北久里浜','久里浜'].forEach(function(cls){
     (KOMA_DEF[cls]||[]).forEach(function(def){
-      var cb = document.getElementById('koma_'+def.id);
-      var ol = document.getElementById('komaol_'+def.id);
-      if(cb){ cb.disabled = !attrJuku; if(!attrJuku){ cb.checked=false; ol&&(ol.checked=false); } }
-      var lbl = document.querySelector('label[for="koma_'+def.id+'"]');
-      var lblOl = document.querySelector('label[for="komaol_'+def.id+'"]');
-      if(lbl) lbl.style.opacity = attrJuku?'':'0.3';
-      if(lblOl) lblOl.style.opacity = attrJuku?'':'0.3';
+      if(def.satType){
+        // 土曜コマ：チェックボックス
+        var cb = document.getElementById('koma_'+def.id);
+        if(cb){ cb.disabled = !attrJuku; if(!attrJuku) cb.checked = false; }
+      } else {
+        // 平日コマ：ラジオ3択
+        ['n','e','o'].forEach(function(k){
+          var rd = document.getElementById('komamode_'+k+'_'+def.id);
+          if(rd){ rd.disabled = !attrJuku; if(!attrJuku) rd.checked = false; }
+        });
+      }
     });
   });
-  // CAテーブルのdisabled切り替え
+  // CAテーブルのdisabled切り替え（チェックボックス）
   ['北久里浜','久里浜'].forEach(function(cls){
     (CA_KOMA_DEF[cls]||[]).forEach(function(def){
       var cb = document.getElementById('koma_'+def.id);
       var ol = document.getElementById('komaol_'+def.id);
       if(cb){ cb.disabled = !attrCa; if(!attrCa){ cb.checked=false; ol&&(ol.checked=false); } }
-      var lbl = document.querySelector('label[for="koma_'+def.id+'"]');
-      var lblOl = document.querySelector('label[for="komaol_'+def.id+'"]');
-      if(lbl) lbl.style.opacity = attrCa?'':'0.3';
-      if(lblOl) lblOl.style.opacity = attrCa?'':'0.3';
     });
   });
   // ヘッダー色切り替え
@@ -5137,17 +5205,41 @@ function refreshKomaTableDisabled(){
 
 function getKomasFromUI(){
   var komas = [];
-  [KOMA_DEF, CA_KOMA_DEF].forEach(function(defMap){
-    ['北久里浜','久里浜'].forEach(function(cls){
-      (defMap[cls]||[]).forEach(function(def){
+  // --- 塾コマ（平日＋土曜統合）---
+  ['北久里浜','久里浜'].forEach(function(cls){
+    (KOMA_DEF[cls]||[]).forEach(function(def){
+      if(def.satType){
+        // 土曜コマ：チェックのみ
         var cb = document.getElementById('koma_'+def.id);
-        var olCb = document.getElementById('komaol_'+def.id);
-        var isOnline = !!(olCb && olCb.checked && !olCb.disabled);
-        var isNormal = !!(cb && cb.checked && !cb.disabled);
-        if(isNormal || isOnline){
-          komas.push({id:def.id, classroom:cls, youbi:def.youbi, time:def.time, online:isOnline && !isNormal});
+        if(cb && cb.checked && !cb.disabled){
+          var entry = {id:def.id, classroom:cls, youbi:def.youbi, time:def.time, satType:def.satType};
+          komas.push(entry);
         }
-      });
+      } else {
+        // 平日コマ：通常/演習/online 3択ラジオ
+        var rdNorm = document.getElementById('komamode_n_'+def.id);
+        var rdEn   = document.getElementById('komamode_e_'+def.id);
+        var rdOl   = document.getElementById('komamode_o_'+def.id);
+        if(rdNorm && rdNorm.checked && !rdNorm.disabled){
+          komas.push({id:def.id, classroom:cls, youbi:def.youbi, time:def.time, online:false});
+        } else if(rdEn && rdEn.checked && !rdEn.disabled){
+          komas.push({id:def.id, classroom:cls, youbi:def.youbi, time:def.time, satType:'enshuu', online:false});
+        } else if(rdOl && rdOl.checked && !rdOl.disabled){
+          komas.push({id:def.id, classroom:cls, youbi:def.youbi, time:def.time, online:true});
+        }
+      }
+    });
+  });
+  // --- CAコマ（従来通りチェックボックス）---
+  ['北久里浜','久里浜'].forEach(function(cls){
+    (CA_KOMA_DEF[cls]||[]).forEach(function(def){
+      var cb = document.getElementById('koma_'+def.id);
+      var olCb = document.getElementById('komaol_'+def.id);
+      var isOnline = !!(olCb && olCb.checked && !olCb.disabled);
+      var isNormal = !!(cb && cb.checked && !cb.disabled);
+      if(isNormal || isOnline){
+        komas.push({id:def.id, classroom:cls, youbi:def.youbi, time:def.time, online:isOnline && !isNormal});
+      }
     });
   });
   return komas;
@@ -5714,12 +5806,18 @@ function buildKomaSummary(m){
   if(ca.length){
     parts.push('CA '+ca.map(function(k){ return k.youbi+(k.time?k.time.split('〜')[0]:''); }).join('・'));
   }
-  // 土曜授業（satTypeで識別）
-  var satLabels = {eiken:'英検対策', sat:'土曜演習', hira:'平日演習回', juken:'受験特訓'};
+  // 土曜授業・演習回（satTypeで識別）
+  var satLabels = {eiken:'英検対策', enshuu:'演習回', sat:'土曜演習', hira:'平日演習回', juken:'受験特訓'};
   var satKomas = komas.filter(function(k){ return k.satType; });
   satKomas.forEach(function(k){
     var lbl = satLabels[k.satType] || k.satType;
-    parts.push(lbl+' 土'+(k.time?k.time.split('〜')[0]:''));
+    var t = k.time ? k.time.split('〜')[0] : '';
+    // enshuuは平日コマのため曜日を使用、他は土曜固定
+    if(k.satType === 'enshuu'){
+      parts.push(lbl+' '+(k.youbi||'')+t);
+    } else {
+      parts.push(lbl+' 土'+t);
+    }
   });
 
   return parts.join(' ／ ');
@@ -5730,14 +5828,17 @@ function buildBulkCardKomaBadges(m){
   ensureBulkFilter();
   var komas = m.komas || [];
   var html = '';
-  var satLabels = {eiken:'英検対策', sat:'土曜演習', hira:'平日演習回', juken:'受験特訓'};
+  var satLabels = {eiken:'英検対策', enshuu:'演習回', sat:'土曜演習', hira:'平日演習回', juken:'受験特訓'};
 
   komas.forEach(function(k){
     var t = k.time ? k.time.split('〜')[0] : '';
     var isCa  = k.id && k.id.indexOf('ca_')===0;
-    var isSat = !!k.satType;
+    var isSat = !!k.satType && k.satType !== 'enshuu';  // enshuuは平日コマ扱い
+    var isEnshuu = k.satType === 'enshuu';
     var prefix = isCa ? 'CA ' : (isSat ? '' : (k.online ? 'オン ' : ''));
-    var labelText = isSat ? (satLabels[k.satType]||k.satType)+' 土'+t : k.youbi+t;
+    var labelText = isSat ? (satLabels[k.satType]||k.satType)+' 土'+t
+                 : isEnshuu ? k.youbi+t+'[演]'
+                 : k.youbi+t;
 
     // フィルタ合致チェック
     var youbiMatch = !_bulkFilter.youbi.length || _bulkFilter.youbi.indexOf(k.youbi)>=0;
@@ -5826,7 +5927,8 @@ function getBulkFiltered(){
         if(opts.indexOf('normal')>=0 && !k.online && !k.satType) match=true;
         if(opts.indexOf('online')>=0 && k.online)                match=true;
         if(opts.indexOf('eiken')>=0  && k.satType==='eiken')     match=true;
-        if(opts.indexOf('sat')>=0    && k.satType==='sat')        match=true;
+        if(opts.indexOf('enshuu')>=0 && k.satType==='enshuu')    match=true;
+        if(opts.indexOf('sat')>=0    && k.satType==='sat')        match=true;  // 旧形式互換
         if(opts.indexOf('juken')>=0  && k.satType==='juken')      match=true;
       });
       if(!match) return false;
@@ -7917,11 +8019,8 @@ function renderEnrollKoma(){
   var cls = document.getElementById('enrollClassroom') ? document.getElementById('enrollClassroom').value : '';
   var attrJuku = document.getElementById('enrollAttrJuku') && document.getElementById('enrollAttrJuku').checked;
   var attrCa   = document.getElementById('enrollAttrCa')   && document.getElementById('enrollAttrCa').checked;
+  // 土曜コマはKOMA_DEFに統合済みのため、renderKomaForWrapで自動表示
   renderKomaForWrap('enrollKomaWrap', cls, attrJuku, attrCa, []);
-  // 土曜コマ（塾コースがONの場合のみ表示）
-  var satGrp = document.getElementById('enrollSatKomaGroup');
-  if(satGrp) satGrp.style.display = (attrJuku && cls) ? '' : 'none';
-  if(attrJuku && cls) renderSatKomaUI([], cls, 'enrollSatKomaWrap');
 }
 function renderAddKoma(){
   var cls = document.getElementById('addClassroom') ? document.getElementById('addClassroom').value : '';
@@ -7933,18 +8032,38 @@ function getKomasFromWrap(wrapId){
   var wrap = document.getElementById(wrapId);
   if(!wrap) return [];
   var komas = [];
-  var allDefs = [KOMA_DEF, CA_KOMA_DEF];
-  allDefs.forEach(function(defMap){
-    ['北久里浜','久里浜'].forEach(function(cls){
-      (defMap[cls]||[]).forEach(function(def){
+  // 塾コマ（平日ラジオ+土曜チェック統合）
+  ['北久里浜','久里浜'].forEach(function(cls){
+    (KOMA_DEF[cls]||[]).forEach(function(def){
+      if(def.satType){
         var cb = wrap.querySelector('#koma_'+def.id);
-        var ol = wrap.querySelector('#komaol_'+def.id);
-        var isOnline = !!(ol && ol.checked);
-        var isNormal = !!(cb && cb.checked);
-        if(isNormal || isOnline){
-          komas.push({id:def.id, classroom:cls, youbi:def.youbi, time:def.time, online:isOnline && !isNormal});
+        if(cb && cb.checked){
+          komas.push({id:def.id, classroom:cls, youbi:def.youbi, time:def.time, satType:def.satType});
         }
-      });
+      } else {
+        var rdNorm = wrap.querySelector('#komamode_n_'+def.id);
+        var rdEn   = wrap.querySelector('#komamode_e_'+def.id);
+        var rdOl   = wrap.querySelector('#komamode_o_'+def.id);
+        if(rdNorm && rdNorm.checked){
+          komas.push({id:def.id, classroom:cls, youbi:def.youbi, time:def.time, online:false});
+        } else if(rdEn && rdEn.checked){
+          komas.push({id:def.id, classroom:cls, youbi:def.youbi, time:def.time, satType:'enshuu', online:false});
+        } else if(rdOl && rdOl.checked){
+          komas.push({id:def.id, classroom:cls, youbi:def.youbi, time:def.time, online:true});
+        }
+      }
+    });
+  });
+  // CAコマ（チェックボックス）
+  ['北久里浜','久里浜'].forEach(function(cls){
+    (CA_KOMA_DEF[cls]||[]).forEach(function(def){
+      var cb = wrap.querySelector('#koma_'+def.id);
+      var ol = wrap.querySelector('#komaol_'+def.id);
+      var isOnline = !!(ol && ol.checked);
+      var isNormal = !!(cb && cb.checked);
+      if(isNormal || isOnline){
+        komas.push({id:def.id, classroom:cls, youbi:def.youbi, time:def.time, online:isOnline && !isNormal});
+      }
     });
   });
   return komas;
@@ -8434,7 +8553,7 @@ function confirmEnrollProceed(){
     targetSchool: (document.getElementById('enrollTargetSchool').value||'').trim(),
     birthdate:'', policyMemo:'',
     jukuEnroll: document.getElementById('enrollDate').value,
-    komas:             getKomasFromWrap('enrollKomaWrap').concat(getSatKomasFromWrapId('enrollSatKomaWrap')),
+    komas:             getKomasFromWrap('enrollKomaWrap'),  // 土曜コマはKOMA_DEFに統合済み
     lessonDates:       getLessonDates('enrollLessonDates'),
     enrollRoute:       document.getElementById('enrollRoute') ? document.getElementById('enrollRoute').value : '',
     jukuLeave:'', caEnroll: document.getElementById('enrollAttrCa').checked ? document.getElementById('enrollDate').value : '', caLeave:'',
