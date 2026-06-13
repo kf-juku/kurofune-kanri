@@ -5042,15 +5042,20 @@ var SAT_KOMA_DEF = [
 ];
 
 function attachKomaRadioToggle(container){
-  (container || document).querySelectorAll('.koma-mode-radio').forEach(function(radio){
-    radio.addEventListener('mousedown', function(e){
-      if(this.checked){
-        var me = this;
-        // mousedown後にclickでcheckedになるのを防ぐため、一時的にdisabledにしてすぐ戻す
-        me.checked = false;
-        // 同グループの全radioをunchecked状態にする
-        document.querySelectorAll('input[name="'+me.name+'"]').forEach(function(r){ r.checked = false; });
-        e.preventDefault();
+  (container || document).querySelectorAll('.koma-mode-label').forEach(function(label){
+    var radioId = label.getAttribute('for');
+    if(!radioId) return;
+    label.addEventListener('mousedown', function(){
+      var radio = document.getElementById(radioId);
+      if(radio && radio.checked && !radio.disabled){
+        label._pendingUncheck = true;
+      }
+    });
+    label.addEventListener('click', function(){
+      if(label._pendingUncheck){
+        label._pendingUncheck = false;
+        var radio = document.getElementById(radioId);
+        if(radio && !radio.disabled){ radio.checked = false; }
       }
     });
   });
