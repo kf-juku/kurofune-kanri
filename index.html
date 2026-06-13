@@ -5094,9 +5094,11 @@ function buildKomaTableHtml(defMap, komas, disabled, simpleMode){
         if(!def){ col += '<td style="background:#f9fafb;"></td>'; return; }
         var isSat = !!def.satType;
         var existing = komas.find(function(k){ return k.id===def.id; });
-        // enshuu判定：既存データにsatType:hira/satも受容
+        // enshuu判定：既存データにsatType:hira/satも受容（classroom一致必須）
         if(!existing && def.satType === 'enshuu'){
           existing = komas.find(function(k){
+            // classroom不一致は除外
+            if(k.classroom && k.classroom !== cls) return false;
             if(k.satType === 'enshuu' && k.youbi === def.youbi && k.time === def.time) return true;
             // 旧形式互換：sat+同じ時間帯
             if(k.satType === 'sat' && k.youbi === '土' && k.time === def.time) return true;
@@ -8024,13 +8026,11 @@ function renderKomaForWrap(wrapId, cls, attrJuku, attrCa, komas){
   var html = '';
   if(attrJuku){
     html += '<div style="font-size:11px;font-weight:700;color:#6b7280;margin:6px 0 3px;">🏫 進学塾コマ</div>';
-    var jukuDefMap = {}; if(KOMA_DEF[cls]) jukuDefMap[cls] = KOMA_DEF[cls];
-    html += buildKomaTableHtml(jukuDefMap, komas||[], false);
+    html += buildKomaTableHtml({'北久里浜': KOMA_DEF['北久里浜']||[], '久里浜': KOMA_DEF['久里浜']||[]}, komas||[], false);
   }
   if(attrCa){
     html += '<div style="font-size:11px;font-weight:700;color:#6b7280;margin:6px 0 3px;">💻 CAコマ</div>';
-    var caDefMap = {}; if(CA_KOMA_DEF[cls]) caDefMap[cls] = CA_KOMA_DEF[cls];
-    html += buildKomaTableHtml(caDefMap, komas||[], false, true);
+    html += buildKomaTableHtml({'北久里浜': CA_KOMA_DEF['北久里浜']||[], '久里浜': CA_KOMA_DEF['久里浜']||[]}, komas||[], false, true);
   }
   if(!attrJuku && !attrCa) html = '<span style="color:#9ca3af;font-size:12px;">コースを選択してください</span>';
   wrap.innerHTML = html;
