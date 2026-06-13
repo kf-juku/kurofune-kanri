@@ -1590,14 +1590,6 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
           <label class="form-label">初回授業日</label>
           <input class="form-input" type="date" id="addFirstLesson">
         </div>
-        <div class="form-group" style="margin:0;grid-column:1/-1;">
-          <label class="form-label">受講コマ</label>
-          <div id="addKomaWrap" style="margin-top:4px;font-size:12px;color:#9ca3af;">教室を選択すると表示されます</div>
-        </div>
-        <div class="form-group" style="margin:0;grid-column:1/-1;">
-          <label class="form-label">授業日（初回〜）</label>
-          <div id="addLessonDates" style="display:flex;flex-direction:column;gap:4px;margin-top:4px;"></div>
-        </div>
       </div>
 
       <div class="form-group" style="margin:0;">
@@ -1607,6 +1599,14 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
           <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;"><input type="checkbox" id="addAttrCa" style="accent-color:var(--crimson);width:16px;height:16px;" onchange="renderAddKoma()">💻 CA</label>
         </div>
       </div>
+        <div class="form-group" style="margin:0;grid-column:1/-1;">
+          <label class="form-label">受講コマ</label>
+          <div id="addKomaWrap" style="margin-top:4px;font-size:12px;color:#9ca3af;">教室を選択すると表示されます</div>
+        </div>
+        <div class="form-group" style="margin:0;grid-column:1/-1;">
+          <label class="form-label">授業日（初回〜）</label>
+          <div id="addLessonDates" style="display:flex;flex-direction:column;gap:4px;margin-top:4px;"></div>
+        </div>
     </div>
     <div class="modal-foot">
       <button class="btn-secondary" onclick="closeAddModal()">キャンセル</button>
@@ -1736,20 +1736,18 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
           </select>
         </div>
       </div>
-      <div class="form-group" style="margin:4px 0 0;">
-        <label class="form-label">受講コマ</label>
-        <div id="enrollKomaWrap" style="margin-top:4px;font-size:12px;color:#9ca3af;">教室を選択すると表示されます</div>
-      <!-- enrollSatKomaGroup廃止済み（v2.22〜）：enrollKomaWrapのKOMA_DEFに土曜コマ統合 -->
-      <div id="enrollSatKomaGroup" style="display:none;"><div id="enrollSatKomaWrap"></div></div>
-      </div>
-
-
       <div class="form-group" style="margin:0;">
         <label class="form-label">コース</label>
         <div style="display:flex;gap:16px;margin-top:4px;">
           <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;"><input type="checkbox" id="enrollAttrJuku" style="accent-color:var(--crimson);width:16px;height:16px;" onchange="renderEnrollKoma()">🏫 進学塾</label>
           <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;"><input type="checkbox" id="enrollAttrCa" style="accent-color:var(--crimson);width:16px;height:16px;" onchange="renderEnrollKoma()">💻 CA</label>
         </div>
+      </div>
+      <div class="form-group" style="margin:4px 0 0;">
+        <label class="form-label">受講コマ</label>
+        <div id="enrollKomaWrap" style="margin-top:4px;font-size:12px;color:#9ca3af;">教室を選択すると表示されます</div>
+      <!-- enrollSatKomaGroup廃止済み（v2.22〜）：enrollKomaWrapのKOMA_DEFに土曜コマ統合 -->
+      <div id="enrollSatKomaGroup" style="display:none;"><div id="enrollSatKomaWrap"></div></div>
       </div>
     </div>
     <div class="modal-foot">
@@ -5115,7 +5113,7 @@ function buildKomaTableHtml(defMap, komas, disabled, simpleMode){
           col += '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;">'
             + '<input class="koma-cb" type="checkbox" id="koma_'+def.id+'" '+satChecked+dis+'>'
             + '<label class="koma-label" for="koma_'+def.id+'"'+(disabled?' style="opacity:0.3;cursor:default;"':'')+'>✓</label>'
-            + '<span style="font-size:8.5px;background:'+badge.bg+';color:'+badge.color+';padding:0 3px;border-radius:3px;font-weight:700;white-space:normal;word-break:keep-all;text-align:center;line-height:1.2;">'+badge.label+(def.satLabel?'<br>'+def.satLabel:'')+'</span>'
+            + '<span style="font-size:8.5px;background:'+badge.bg+';color:'+badge.color+';padding:0 3px;border-radius:3px;font-weight:700;white-space:normal;word-break:keep-all;text-align:center;line-height:1.2;">'+( def.satLabel ? def.satLabel : badge.label )+'</span>'
             + '</div>';
         } else {
           // 平日コマ：通常/演習/online の3択トグル
