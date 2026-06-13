@@ -5058,8 +5058,8 @@ function attachKomaRadioToggle(container){
 function buildKomaTableHtml(defMap, komas, disabled, simpleMode){
   var dis = disabled ? ' disabled' : '';
   var CR_STYLE = {
-    '北久里浜': 'background:#f0f9ff;border:1.5px solid #bae6fd;border-radius:8px;padding:8px;flex:1;min-width:0;',
-    '久里浜':   'background:#fff7ed;border:1.5px solid #fed7aa;border-radius:8px;padding:8px;flex:1;min-width:0;'
+    '北久里浜': 'background:#f0f9ff;border:1.5px solid #bae6fd;border-radius:8px;padding:8px;flex:1;min-width:0;overflow-x:auto;',
+    '久里浜':   'background:#fff7ed;border:1.5px solid #fed7aa;border-radius:8px;padding:8px;flex:1;min-width:0;overflow-x:auto;'
   };
   var CR_LABEL_STYLE = {
     '北久里浜': 'font-size:11px;font-weight:700;color:#0369a1;margin-bottom:6px;',
@@ -5083,7 +5083,7 @@ function buildKomaTableHtml(defMap, komas, disabled, simpleMode){
     var col = '<div style="' + CR_STYLE[cls] + '">';
     col += '<div style="' + CR_LABEL_STYLE[cls] + '">【' + cls + '】</div>';
     col += '<table class="koma-table' + (disabled?' koma-table-disabled':'') + '" style="width:100%;"><thead><tr><th>時間</th>';
-    youbis.forEach(function(y){ col += '<th>' + y + '</th>'; });
+    youbis.forEach(function(y){ var isSatCol = (y==='土'); col += '<th' + (isSatCol?' style="min-width:42px;"':'') + '>' + y + '</th>'; });
     col += '</tr></thead><tbody>';
     times.forEach(function(t){
       col += '<tr><td class="koma-time">' + t + '</td>';
@@ -5113,7 +5113,7 @@ function buildKomaTableHtml(defMap, komas, disabled, simpleMode){
           col += '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;">'
             + '<input class="koma-cb" type="checkbox" id="koma_'+def.id+'" '+satChecked+dis+'>'
             + '<label class="koma-label" for="koma_'+def.id+'"'+(disabled?' style="opacity:0.3;cursor:default;"':'')+'>✓</label>'
-            + '<span style="font-size:8.5px;background:'+badge.bg+';color:'+badge.color+';padding:0 3px;border-radius:3px;font-weight:700;white-space:normal;word-break:keep-all;text-align:center;line-height:1.2;">'+( def.satLabel ? def.satLabel : badge.label )+'</span>'
+            + '<span style="font-size:8px;background:'+badge.bg+';color:'+badge.color+';padding:0 2px;border-radius:3px;font-weight:700;white-space:nowrap;text-align:center;line-height:1.2;display:block;max-width:32px;overflow:hidden;text-overflow:ellipsis;">'+( def.satLabel ? def.satLabel : badge.label )+'</span>'
             + '</div>';
         } else {
           // 平日コマ：通常/演習/online の3択トグル
@@ -5160,7 +5160,7 @@ function buildKomaTableHtml(defMap, komas, disabled, simpleMode){
     col += '</tbody></table></div>';
     cols += col;
   });
-  return '<div style="display:flex;gap:10px;margin-top:6px;">' + cols + '</div>';
+  return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px;">' + cols + '</div>';
 }
 
 function renderKomaTable(m){
