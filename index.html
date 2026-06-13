@@ -5045,17 +5045,13 @@ function attachKomaRadioToggle(container){
   (container || document).querySelectorAll('.koma-mode-label').forEach(function(label){
     var radioId = label.getAttribute('for');
     if(!radioId) return;
-    label.addEventListener('mousedown', function(){
+    label.addEventListener('click', function(e){
       var radio = document.getElementById(radioId);
-      if(radio && radio.checked && !radio.disabled){
-        label._pendingUncheck = true;
-      }
-    });
-    label.addEventListener('click', function(){
-      if(label._pendingUncheck){
-        label._pendingUncheck = false;
-        var radio = document.getElementById(radioId);
-        if(radio && !radio.disabled){ radio.checked = false; }
+      if(!radio || radio.disabled) return;
+      if(radio.checked){
+        // すでに選択済み → checkedをfalseにして解除
+        e.preventDefault();
+        radio.checked = false;
       }
     });
   });
