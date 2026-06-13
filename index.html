@@ -5186,6 +5186,10 @@ function renderSatKomaUI(komas, classroom, wrapId){
     // --- 英検対策 ---
     var eikenId = 'sat_eiken_' + crKey;
     var eikenEx = (komas||[]).find(function(k){ return k.id === eikenId || (k.satType==='eiken' && k.classroom===cr); });
+    // 旧形式互換：classroom未設定のeikenは北久里浜セクションに表示
+    if(!eikenEx && cr === '北久里浜'){
+      eikenEx = (komas||[]).find(function(k){ return k.satType==='eiken' && !k.classroom; });
+    }
     var eikenRow = document.createElement('div');
     eikenRow.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:4px;';
     var eikenCb = document.createElement('input');
@@ -5244,6 +5248,10 @@ function renderSatKomaUI(komas, classroom, wrapId){
     var hiraSel = document.createElement('select');
     hiraSel.id = 'satHiraKoma_' + crKey;
     var hiraVal = hiraEx ? (hiraEx.hiraKoma || '') : '';
+    // 旧形式互換：「曜日時刻」形式を「教室_曜日時刻」形式に補完
+    if(hiraVal && hiraVal.indexOf('_') === -1){
+      hiraVal = cr + '_' + hiraVal;
+    }
     hiraSel.style.cssText = 'display:'+(hiraEx?'inline-flex':'none')+';font-size:11px;padding:3px 6px;border:1.5px solid var(--crimson);border-radius:6px;color:var(--crimson-dark);background:white;';
     var hiraOpt = '<option value="">教室・曜日・時刻を選択</option>';
     // 全教室の平日コマをリスト
