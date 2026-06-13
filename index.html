@@ -1520,7 +1520,7 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
     <div class="modal-body" style="display:flex;flex-direction:column;gap:10px;">
       <div class="enroll-section-title">基本情報</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-        <div class="form-group" style="margin:0;grid-column:1/-1;">
+        <div class="form-group" style="margin:0;">
           <label class="form-label">名前 <span class="req">*</span></label>
           <input class="form-input" type="text" id="addName" placeholder="例：田中 太郎">
         </div>
@@ -1586,10 +1586,7 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
           <label class="form-label">入会日</label>
           <input class="form-input" type="date" id="addEnrollDate">
         </div>
-        <div class="form-group" style="margin:0;">
-          <label class="form-label">初回授業日</label>
-          <input class="form-input" type="date" id="addFirstLesson">
-        </div>
+
       </div>
 
       <div class="form-group" style="margin:0;">
@@ -1603,10 +1600,7 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
           <label class="form-label">受講コマ</label>
           <div id="addKomaWrap" style="margin-top:4px;font-size:12px;color:#9ca3af;">教室を選択すると表示されます</div>
         </div>
-        <div class="form-group" style="margin:0;grid-column:1/-1;">
-          <label class="form-label">授業日（初回〜）</label>
-          <div id="addLessonDates" style="display:flex;flex-direction:column;gap:4px;margin-top:4px;"></div>
-        </div>
+
     </div>
     <div class="modal-foot">
       <button class="btn-secondary" onclick="closeAddModal()">キャンセル</button>
@@ -4316,7 +4310,6 @@ function openAddModal(){
   populateDetailSelect('addSchool', loadMaster(KEY_SCHOOL,[]), '', true);
   populateDetailSelect('addTargetSchool', loadMaster(KEY_TARGET,[]), '', true);
   renderAddKoma();
-  initLessonDates('addLessonDates');
   document.getElementById('addOverlay').classList.add('show');
   setTimeout(function(){ document.getElementById('addName').focus(); },100);
 }
@@ -4344,7 +4337,6 @@ function saveAdd(){
     targetSchool: document.getElementById('addTargetSchool').value||'',
     youbi:     '',
     komas:      getKomasFromWrap('addKomaWrap'),
-    lessonDates: getLessonDates('addLessonDates'),
     policyMemo:'',
     jukuEnroll: attrJuku ? enrollDate : '',
     jukuLeave:'',
