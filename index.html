@@ -5041,6 +5041,21 @@ var SAT_KOMA_DEF = [
   {id:'sat_juken', youbi:'土', time:'19:00〜21:30', satType:'juken', label:'受験特訓'},
 ];
 
+function attachKomaRadioToggle(container){
+  (container || document).querySelectorAll('.koma-mode-radio').forEach(function(radio){
+    radio.addEventListener('mousedown', function(e){
+      if(this.checked){
+        var me = this;
+        // mousedown後にclickでcheckedになるのを防ぐため、一時的にdisabledにしてすぐ戻す
+        me.checked = false;
+        // 同グループの全radioをunchecked状態にする
+        document.querySelectorAll('input[name="'+me.name+'"]').forEach(function(r){ r.checked = false; });
+        e.preventDefault();
+      }
+    });
+  });
+}
+
 function buildKomaTableHtml(defMap, komas, disabled, simpleMode){
   var dis = disabled ? ' disabled' : '';
   var CR_STYLE = {
@@ -5158,11 +5173,13 @@ function renderKomaTable(m){
   var jukuHtml = '<div class="koma-course-header' + (!attrJuku?' koma-course-header-disabled':'') + '">🏫 進学塾コマ</div>';
   jukuHtml += buildKomaTableHtml(KOMA_DEF, komas, !attrJuku);
   jukuWrap.innerHTML = jukuHtml;
+  attachKomaRadioToggle(jukuWrap);
   // CAセクション
   if(caWrap){
     var caHtml = '<div class="koma-course-header' + (!attrCa?' koma-course-header-disabled':'') + '" style="margin-top:12px;">💻 CAコマ</div>';
     caHtml += buildKomaTableHtml(CA_KOMA_DEF, komas, !attrCa, true);
     caWrap.innerHTML = caHtml;
+    attachKomaRadioToggle(caWrap);
   }
   // 土曜授業セクションを非表示（KOMA_DEFに統合）
   var satWrap = document.getElementById('komaOptSatWrap');
@@ -8014,6 +8031,7 @@ function renderKomaForWrap(wrapId, cls, attrJuku, attrCa, komas){
   }
   if(!attrJuku && !attrCa) html = '<span style="color:#9ca3af;font-size:12px;">コースを選択してください</span>';
   wrap.innerHTML = html;
+  attachKomaRadioToggle(wrap);
 }
 function renderEnrollKoma(){
   var cls = document.getElementById('enrollClassroom') ? document.getElementById('enrollClassroom').value : '';
