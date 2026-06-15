@@ -611,15 +611,16 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
 .iq-subject-btn:hover { border-color:var(--crimson); color:var(--crimson); background:#fff5f5; }
 /* 入会面談メモ（自動拡張） */
 .iq-interview-memo {
+  /* 川上さん指示(2026-06-15)：自動拡張なし。デフォルトで縦に広く固定し、超過分は欄内スクロール */
   width:100%; box-sizing:border-box;
   font-size:12px; font-family:inherit; color:#374151;
   border:1.5px solid #e5e7eb; border-radius:8px;
-  padding:6px 8px; margin-top:6px; resize:none; overflow:hidden;
-  min-height:32px; line-height:1.5;
-  transition:border-color 0.15s, min-height 0.15s;
+  padding:6px 8px; margin-top:6px; resize:none; overflow-y:auto;
+  min-height:160px; line-height:1.5;
+  transition:border-color 0.15s;
   background:#fff;
 }
-.iq-interview-memo:focus { outline:none; border-color:var(--crimson); min-height:64px; }
+.iq-interview-memo:focus { outline:none; border-color:var(--crimson); }
 .iq-interview-memo::placeholder { color:#c4c4c4; font-size:11px; }
 /* 入会登録モーダル強調 */
 .enroll-field-required { border-color:var(--crimson) !important; }
@@ -6780,8 +6781,8 @@ function buildIqCard(iq){
     +'<div class="iq-step-top"><input type="checkbox" id="iqe_s1done_'+iq.id+'" '+(s1.done?'checked':'')+' onchange="onIqCardStepChange(\''+iq.id+'\',1)"><label for="iqe_s1done_'+iq.id+'">来訪アポ済</label></div>'
     +'</div>'
     +'<textarea class="iq-interview-memo" id="iqe_imemo_'+iq.id+'"'
-    +' placeholder="入会面談メモ（入力すると自動拡張）"'
-    +' oninput="autoGrow(this)" onblur="saveIqCardAuto(this)">'+esc(iq.interviewMemo||'')+'</textarea>'
+    +' placeholder="入会面談メモ"'
+    +' onblur="saveIqCardAuto(this)">'+esc(iq.interviewMemo||'')+'</textarea>'
     +'</div>'
 
     /* 列2: 体験 */
