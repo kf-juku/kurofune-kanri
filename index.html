@@ -422,6 +422,17 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
 .bulk-ssa-saved-mark { color:var(--crimson); font-size:12px; }
 .bulk-ssa-btn-row { margin-top:8px; display:flex; gap:8px; align-items:center; }
 .bulk-check-all-btn { font-size:12px; background:var(--crimson-light); border:1px solid var(--crimson-mid); border-radius:5px; padding:4px 12px; cursor:pointer; color:var(--crimson-dark); font-family:inherit; font-weight:bold; }
+/* 面談記録タブ ボタン群リデザイン（2026-06-24・C案＋前回記録独立バー） */
+.bulk-op-label { font-size:11px; color:#9ca3af; }
+.bulk-seg { display:inline-flex; border:1px solid #d1d5db; border-radius:6px; overflow:hidden; }
+.bulk-seg-btn { font-size:12px; background:#fff; color:#374151; border:none; padding:6px 14px; cursor:pointer; font-family:inherit; }
+.bulk-seg-btn:first-child { border-right:1px solid #e5e7eb; }
+.bulk-seg-btn:hover { background:#f3f4f6; }
+.bulk-count-btn { font-size:12px; background:#f3f4f6; color:#6b7280; border:1px solid #e5e7eb; border-radius:6px; padding:6px 12px; cursor:pointer; font-family:inherit; display:flex; align-items:center; gap:4px; }
+.bulk-count-btn:hover { background:#e5e7eb; }
+.bulk-hist-bar { display:flex; align-items:center; gap:8px; padding:8px 4px; margin-bottom:8px; border-bottom:1px dashed #d1d5db; }
+.bulk-hist-toggle-btn { font-size:12px; background:#fff; color:#6b7280; border:1px solid #e5e7eb; border-radius:6px; padding:6px 12px; cursor:pointer; font-family:inherit; }
+.bulk-hist-toggle-btn:hover { background:#f3f4f6; }
 /* 種別タブ（授業メモ/面談）*/
 .bulk-type-tabs { display:flex; gap:0; margin-bottom:14px; border-radius:8px; overflow:hidden; border:1.5px solid #e5e7eb; background:white; align-self:flex-start; }
 .bulk-type-btn { border:none; background:white; padding:8px 20px; font-size:13px; font-family:inherit; cursor:pointer; color:#6b7280; font-weight:bold; transition:all 0.15s; }
@@ -472,6 +483,17 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
 .bulk-hist-label { font-size:9.5px; font-weight:700; background:#ede9fe; color:#5b21b6; border-radius:10px; padding:1px 6px; }
 .bulk-hist-content { font-size:11.5px; color:var(--text); line-height:1.55; white-space:pre-wrap; }
 .hist-expand-hint { font-size:10px; color:#6366f1; margin-left:3px; }
+/* 過去面談記録の編集UI（2026-06-24 追加） */
+.hist-edit-btn { background:#eef2ff; border:1px solid #c7d2fe; color:#4338ca; border-radius:5px; font-size:10px; font-weight:700; padding:2px 7px; cursor:pointer; font-family:inherit; line-height:1.2; }
+.hist-edit-btn:hover { background:#e0e7ff; }
+.hist-edit-chip { background:#f3f4f6; border:1px solid #e5e7eb; color:#9ca3af; border-radius:5px; font-size:10px; font-weight:700; padding:2px 7px; cursor:help; line-height:1.2; white-space:nowrap; }
+.hist-edit-form { display:flex; flex-direction:column; gap:5px; width:100%; }
+.hist-edit-form .hist-edit-row { display:flex; gap:5px; align-items:center; flex-wrap:wrap; }
+.hist-edit-form input[type=date], .hist-edit-form select { font-size:11px; padding:3px 5px; border:1.5px solid #e2e8f0; border-radius:5px; font-family:inherit; }
+.hist-edit-form textarea { font-size:12.5px; padding:8px 10px; border:1.5px solid #c7d2fe; border-radius:6px; font-family:inherit; line-height:1.6; resize:vertical; min-height:120px; width:100%; box-sizing:border-box; }
+.hist-edit-form .hist-edit-btns { display:flex; gap:6px; }
+.hist-edit-save { background:var(--crimson,#be123c); color:#fff; border:none; border-radius:5px; font-size:11px; font-weight:700; padding:4px 12px; cursor:pointer; font-family:inherit; }
+.hist-edit-cancel { background:#f1f5f9; color:#374151; border:1.5px solid #e2e8f0; border-radius:5px; font-size:11px; padding:4px 12px; cursor:pointer; font-family:inherit; }
 .bulk-hist-task { font-size:10px; background:#fef3c7; color:#92400e; border-radius:10px; padding:1px 6px; font-weight:700; margin-top:3px; display:inline-block; }
 .bulk-hist-empty { font-size:11px; color:var(--text-light); text-align:center; padding:16px 0; }
 /* 保存ボタン */
@@ -1190,11 +1212,7 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
       <span class="tab-header-title">💬 面談記録</span>
       <input type="date" id="bulkDate" style="font-size:13px;padding:4px 8px;border:1.5px solid #e2e8f0;border-radius:6px;font-family:inherit;">
-      <span id="bulkProgressText" style="font-size:12px;color:#6b7280;"></span>
-      <button class="btn-tool" onclick="bulkSaveAllToGas()" id="bulkGasBtn">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-        保存
-      </button>
+      <!-- 川上さん指示(2026-06-24)：上部「保存」（全件同期）ボタンと進捗表示「○人保存済み/○人選択中」を削除。各カードの保存ボタンでGAS同期済みのため重複・誤解の元だった -->
     </div>
   </div>
   <!-- 絞り込みエリア -->
@@ -1230,12 +1248,21 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
         <span id="bulkSSACount" style="font-size:11px;font-weight:normal;color:#6b7280;"></span>
       </div>
       <div class="bulk-ssa-items" id="bulkSSAItems"></div>
+      <!-- C案：全員チェック/全解除を連結＋「一括操作」ラベル・選択中トグルは右寄せ（2026-06-24） -->
       <div class="bulk-ssa-btn-row">
-        <button class="bulk-check-all-btn" onclick="bulkCheckAll()">全員チェック</button>
-        <button class="bulk-check-all-btn" onclick="bulkUncheckAll()">全解除</button>
-        <button class="bulk-check-all-btn" id="bulkHistToggleBtn" onclick="toggleAllBulkHist()" style="margin-left:8px;">前回記録を隠す</button>
-        <button class="bulk-check-all-btn" onclick="toggleBulkSSA()" style="margin-left:4px;display:flex;align-items:center;gap:4px;"><span id="bulkSSACountBtn"></span>▼</button>
+        <span class="bulk-op-label">一括操作</span>
+        <div class="bulk-seg">
+          <button class="bulk-seg-btn" onclick="bulkCheckAll()">全員チェック</button>
+          <button class="bulk-seg-btn" onclick="bulkUncheckAll()">全解除</button>
+        </div>
+        <span style="flex:1;"></span>
+        <button class="bulk-count-btn" onclick="toggleBulkSSA()">選択中 <span id="bulkSSACountBtn"></span>▼</button>
       </div>
+    </div>
+    <!-- 前回記録トグルを選択枠の外（カード一覧のすぐ上）に独立配置（2026-06-24 川上さん指示）。選択枠を閉じても押せる・面談記録の近くに配置 -->
+    <div class="bulk-hist-bar">
+      <span class="bulk-op-label">表示</span>
+      <button class="bulk-hist-toggle-btn" id="bulkHistToggleBtn" onclick="toggleAllBulkHist()">👁 前回記録を隠す</button>
     </div>
     <div class="bulk-student-cards" id="bulkCards"></div>
   </div>
@@ -1437,7 +1464,7 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
             <div class="card-tab-pane active" id="dtpane_interview">
               <div class="bulk-policy" id="dtPolicyIv" style="display:none;"></div>
               <div style="display:flex;gap:8px;align-items:center;margin-bottom:4px;">
-                <select class="form-select" id="dtlabel" style="width:auto;flex-shrink:0;">
+                <select class="form-select" id="dtlabel" style="width:auto;flex-shrink:0;" onchange="onDetailDraftInput()">
                   <option value="入会前">入会前</option>
                   <option value="春面談">春面談</option>
                   <option value="夏面談">夏面談</option>
@@ -1445,7 +1472,7 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
                   <option value="その他">その他</option>
                 </select>
               </div>
-              <textarea class="form-textarea" id="dtcontent_interview" rows="3" placeholder="面談内容..."></textarea>
+              <textarea class="form-textarea" id="dtcontent_interview" rows="3" placeholder="面談内容..." oninput="onDetailDraftInput()"></textarea>
               <div class="bulk-task-section">
                 <div class="bulk-task-header">📌 約束事・タスク</div>
                 <div id="dttaskrows_iv"></div>
@@ -3441,6 +3468,8 @@ function initDetailEdu(m){
   document.getElementById('dtSaveBtn').className = 'bulk-save-btn interview-mode';
   // 履歴描画
   renderDetailEduHist(m, 'interview');
+  // 下書き復元（2026-06-24）
+  restoreDetailDraft(m.id);
 }
 
 function swDetailEduTab(btn){
@@ -3518,6 +3547,7 @@ function saveDetailEduRecord(){
   });
 
   _detailIsDirty = false;
+  clearIvDraft('detail_'+m.id, date); // 本保存できたので下書きを消す（2026-06-24）
   saveToCache(); saveOneStudentToGas(_members[_detailIdx]); renderTasks();
   showToast('保存しました');
   // フォームリセット
@@ -3551,14 +3581,21 @@ function renderDetailEduHist(m, tab){
     var previewText = (iv.content||'').length > 60 ? esc((iv.content||'').slice(0,60))+'…' : esc(iv.content||'');
     var previewAttr = (iv.content||'').length > 60 ? escAttr((iv.content||'').slice(0,60))+'…' : fullAttr;
     var hasMore = (iv.content||'').length > 60;
-    return '<div class="bulk-hist-item iv" style="display:flex;align-items:flex-start;gap:4px;">'
+    // 川上さん指示(2026-06-24)：通常記録は編集ボタン、約束事(isTask)は「編集不可」チップ＋ホバー案内
+    var editCtrl = iv.isTask
+      ? '<span class="hist-edit-chip" title="約束事はタスクマネージャーで修正してください">編集不可</span>'
+      : '<button class="hist-edit-btn" onclick="startInlineHistEdit(\''+esc(m.id)+'\',\''+esc(iv.id||'')+'\',\'detail\')" title="編集">編集</button>';
+    return '<div class="bulk-hist-item iv" id="histitem_detail_'+esc(m.id)+'_'+esc(iv.id||'')+'" style="display:flex;align-items:flex-start;gap:4px;">'
       +'<div style="flex:1;min-width:0;">'
       +'<div class="bulk-hist-date">'+esc(iv.date||'—')+labelHtml+taskBadge+'</div>'
       +'<div class="bulk-hist-content hist-expandable" style="'+contentStyle+(hasMore?'cursor:pointer;':'')+'" data-full="'+fullAttr+'" data-preview="'+previewAttr+'" data-expanded="0" onclick="toggleHistExpand(this)">'
       +previewText+(hasMore?'<span class="hist-expand-hint"> [展開]</span>':'')
       +'</div>'
       +'</div>'
-      +'<button onclick="deleteDetailEduRecord(\''+esc(iv.id||'')+'\',this)" title="削除" style="flex-shrink:0;background:none;border:none;color:#d1d5db;cursor:pointer;font-size:14px;padding:2px 4px;line-height:1;" onmouseover="this.style.color=\'#ef4444\'" onmouseout="this.style.color=\'#d1d5db\'">×</button>'
+      +'<div style="display:flex;flex-direction:column;gap:2px;align-items:flex-end;flex-shrink:0;">'
+      +editCtrl
+      +'<button onclick="deleteDetailEduRecord(\''+esc(iv.id||'')+'\',this)" title="削除" style="background:none;border:none;color:#d1d5db;cursor:pointer;font-size:14px;padding:2px 4px;line-height:1;" onmouseover="this.style.color=\'#ef4444\'" onmouseout="this.style.color=\'#d1d5db\'">×</button>'
+      +'</div>'
       +'</div>';
   }).join('')+'</div>';
 }
@@ -3614,6 +3651,158 @@ function deleteBulkInterview(memberId, recordId){
   showToast('削除しました');
 }
 
+// ===== 過去面談記録のインライン編集（2026-06-24 追加・川上さん指示） =====
+// where: 'bulk'（面談記録タブの右履歴）/ 'detail'（会員詳細パネルの右履歴）
+// 約束事(isTask)は編集不可（チップ表示）。ここに来るのは通常記録のみ。
+var IV_LABEL_OPTS = ['入会前','春面談','夏面談','冬面談','その他'];
+function _rerenderHist(m, where){
+  if(where==='detail'){ renderDetailEduHist(m, 'interview'); return; }
+  var histIvEl = document.getElementById('bhistiv_'+m.id);
+  if(histIvEl){
+    var ivItems = (m.interviews||[]).slice().sort(function(a,b){
+      var dc=(b.date||'').localeCompare(a.date||''); return dc!==0?dc:(b.id||'').localeCompare(a.id||'');
+    });
+    histIvEl.innerHTML = '<div class="bulk-card-right-title">💬 面談の記録</div>' + buildHistRight(m.id, ivItems, true);
+  }
+}
+function startInlineHistEdit(memberId, recordId, where){
+  var m = (_members||[]).find(function(x){ return x.id===memberId; });
+  if(!m) return;
+  var r = (m.interviews||[]).find(function(x){ return x.id===recordId; });
+  if(!r || r.isTask) return; // 約束事は編集不可
+  var item = document.getElementById('histitem_'+where+'_'+memberId+'_'+recordId);
+  if(!item) return;
+  var labelSel = IV_LABEL_OPTS.map(function(l){
+    return '<option'+(l===(r.label||'')?' selected':'')+'>'+esc(l)+'</option>';
+  }).join('');
+  var form = document.createElement('div');
+  form.className = 'hist-edit-form';
+  form.innerHTML =
+    '<div class="hist-edit-row">'
+      +'<input type="date" id="hedate_'+where+'_'+recordId+'" value="'+escAttr(r.date||'')+'">'
+      +'<select id="helabel_'+where+'_'+recordId+'">'+labelSel+'</select>'
+    +'</div>'
+    +'<textarea id="hecontent_'+where+'_'+recordId+'">'+esc(r.content||'')+'</textarea>'
+    +'<div class="hist-edit-btns">'
+      +'<button class="hist-edit-save" onclick="saveInlineHistEdit(\''+esc(memberId)+'\',\''+esc(recordId)+'\',\''+where+'\')">保存</button>'
+      +'<button class="hist-edit-cancel" onclick="cancelInlineHistEdit(\''+esc(memberId)+'\',\''+where+'\')">キャンセル</button>'
+    +'</div>';
+  item.innerHTML = '';
+  item.appendChild(form);
+  var ta = document.getElementById('hecontent_'+where+'_'+recordId);
+  if(ta) ta.focus();
+}
+function saveInlineHistEdit(memberId, recordId, where){
+  var m = (_members||[]).find(function(x){ return x.id===memberId; });
+  if(!m) return;
+  var r = (m.interviews||[]).find(function(x){ return x.id===recordId; });
+  if(!r || r.isTask) return;
+  var dEl = document.getElementById('hedate_'+where+'_'+recordId);
+  var lEl = document.getElementById('helabel_'+where+'_'+recordId);
+  var cEl = document.getElementById('hecontent_'+where+'_'+recordId);
+  var date = dEl ? dEl.value : r.date;
+  var label = lEl ? lEl.value : r.label;
+  var content = cEl ? (cEl.value||'').trim() : r.content;
+  if(!date){ showToast('日付を入力してください', true); return; }
+  if(!content){ showToast('内容を入力してください', true); return; }
+  r.date = date; r.label = label; r.content = content;
+  saveToCache();
+  if(where==='detail') saveOneStudentToGas(m); else saveToGas();
+  _rerenderHist(m, where);
+  showToast('記録を更新しました');
+}
+function cancelInlineHistEdit(memberId, where){
+  var m = (_members||[]).find(function(x){ return x.id===memberId; });
+  if(!m) return;
+  _rerenderHist(m, where);
+}
+
+// ===== 面談記録の下書き自動保存（localStorage）2026-06-24 川上さん指示 =====
+// 本保存(GAS)とは別。入力中の内容をこの端末にだけ自動退避し、タブ移動・リロード・チェック操作でも消えないようにする。
+// 生徒×日付ごとに1件。本保存(saveBulkRecord/saveDetailEduRecord)が成功したらその下書きを消す。
+var _ivDraftTimer = null;
+function ivDraftKey(memberId, date){ return 'sm_iv_draft_'+memberId+'_'+(date||''); }
+function writeIvDraft(memberId, date, obj){
+  try{
+    if((!obj.content||!obj.content.trim()) && !(obj.tasks||[]).some(function(t){return t.content && t.content.trim();})){
+      localStorage.removeItem(ivDraftKey(memberId,date)); return; // 空なら下書きごと消す
+    }
+    localStorage.setItem(ivDraftKey(memberId,date), JSON.stringify(obj));
+  }catch(e){}
+}
+function readIvDraft(memberId, date){
+  try{ var r=localStorage.getItem(ivDraftKey(memberId,date)); return r?JSON.parse(r):null; }catch(e){ return null; }
+}
+function clearIvDraft(memberId, date){ try{ localStorage.removeItem(ivDraftKey(memberId,date)); }catch(e){} }
+
+// 一括カードの下書き収集＋保存（300msデバウンス）
+function onBulkDraftInput(mid){
+  clearTimeout(_ivDraftTimer);
+  _ivDraftTimer = setTimeout(function(){
+    var date = (document.getElementById('bulkDate')||{}).value || '';
+    var cEl = document.getElementById('bcontent_'+mid+'_interview');
+    var lEl = document.getElementById('blabel_'+mid);
+    var tasks=[];
+    for(var i=0;i<5;i++){
+      var tv=document.getElementById('btask_iv_'+mid+'_'+i); if(!tv) break;
+      var td=document.getElementById('btaskdue_iv_'+mid+'_'+i);
+      if((tv.value||'').trim()) tasks.push({content:tv.value, due:td?td.value:''});
+    }
+    writeIvDraft(mid, date, {content:cEl?cEl.value:'', label:lEl?lEl.value:'', tasks:tasks});
+  }, 300);
+}
+// 一括カードに下書きを復元
+function restoreBulkDraft(mid){
+  var date = (document.getElementById('bulkDate')||{}).value || '';
+  var d = readIvDraft(mid, date);
+  if(!d) return;
+  var cEl=document.getElementById('bcontent_'+mid+'_interview'); if(cEl && d.content) cEl.value=d.content;
+  var lEl=document.getElementById('blabel_'+mid); if(lEl && d.label) lEl.value=d.label;
+  (d.tasks||[]).forEach(function(t,i){
+    // 行が足りなければ追加
+    if(!document.getElementById('btask_iv_'+mid+'_'+i)){
+      var container=document.getElementById('btaskrows_iv_'+mid);
+      if(container) container.insertAdjacentHTML('beforeend', buildTaskRow('iv_'+mid, i));
+    }
+    var tv=document.getElementById('btask_iv_'+mid+'_'+i); if(tv) tv.value=t.content||'';
+    var td=document.getElementById('btaskdue_iv_'+mid+'_'+i); if(td) td.value=t.due||'';
+  });
+}
+
+// 個人パネルの下書き収集＋保存（300msデバウンス）
+function onDetailDraftInput(){
+  if(_detailIdx===null) return;
+  var mid=_members[_detailIdx].id;
+  clearTimeout(_ivDraftTimer);
+  _ivDraftTimer = setTimeout(function(){
+    var date=(document.getElementById('dtrecdate')||{}).value || '';
+    var cEl=document.getElementById('dtcontent_interview');
+    var lEl=document.getElementById('dtlabel');
+    var tasks=[];
+    for(var i=0;i<5;i++){
+      var tv=document.getElementById('dttask_iv_'+i); if(!tv) break;
+      var td=document.getElementById('dttaskdue_iv_'+i);
+      if((tv.value||'').trim()) tasks.push({content:tv.value, due:td?td.value:''});
+    }
+    writeIvDraft('detail_'+mid, date, {content:cEl?cEl.value:'', label:lEl?lEl.value:'', tasks:tasks});
+  }, 300);
+}
+function restoreDetailDraft(mid){
+  var date=(document.getElementById('dtrecdate')||{}).value || '';
+  var d=readIvDraft('detail_'+mid, date);
+  if(!d) return;
+  var cEl=document.getElementById('dtcontent_interview'); if(cEl && d.content) cEl.value=d.content;
+  var lEl=document.getElementById('dtlabel'); if(lEl && d.label) lEl.value=d.label;
+  (d.tasks||[]).forEach(function(t,i){
+    if(!document.getElementById('dttask_iv_'+i)){
+      var container=document.getElementById('dttaskrows_iv');
+      if(container) container.insertAdjacentHTML('beforeend', buildDtTaskRow(i));
+    }
+    var tv=document.getElementById('dttask_iv_'+i); if(tv) tv.value=t.content||'';
+    var td=document.getElementById('dttaskdue_iv_'+i); if(td) td.value=t.due||'';
+  });
+}
+
 // 会員詳細・約束事行ビルダー
 function buildDtTaskRow(idx){
   return '<div class="bulk-task-row" id="dttaskrow_iv_'+idx+'">'
@@ -3636,6 +3825,7 @@ function onDtTaskInput(idx){
   if(val && !nextRow && idx < 4){
     container.insertAdjacentHTML('beforeend', buildDtTaskRow(idx+1));
   }
+  onDetailDraftInput(); // 下書き保存
 }
 
 
@@ -5730,7 +5920,6 @@ function initBulkTab(){
   document.getElementById('bulkDate').value = dateToStr(new Date());
   renderBulkChips();
   renderBulkSSA();
-  updateBulkProgress();
 }
 
 function onBulkTypeChange(){
@@ -6075,14 +6264,21 @@ function buildHistRight(memberId, items, isIv){
     var previewText = (r.content||'').length > 50 ? esc((r.content||'').slice(0,50))+'…' : esc(r.content||'');
     var previewAttr = (r.content||'').length > 50 ? escAttr((r.content||'').slice(0,50))+'…' : fullAttr;
     var hasMore = (r.content||'').length > 50;
-    return '<div class="bulk-hist-item'+(isIv?' iv':'')+'" style="display:flex;align-items:flex-start;gap:4px;">'
+    // 川上さん指示(2026-06-24)：通常記録は編集ボタン、約束事(isTask)は「編集不可」チップ＋ホバー案内（約束事はタスクマネージャーで修正）
+    var editCtrl = r.isTask
+      ? '<span class="hist-edit-chip" title="約束事はタスクマネージャーで修正してください">編集不可</span>'
+      : '<button class="hist-edit-btn" onclick="startInlineHistEdit(\''+esc(memberId)+'\',\''+esc(r.id||'')+'\',\'bulk\')" title="編集">編集</button>';
+    return '<div class="bulk-hist-item'+(isIv?' iv':'')+'" id="histitem_bulk_'+esc(memberId)+'_'+esc(r.id||'')+'" style="display:flex;align-items:flex-start;gap:4px;">'
       +'<div style="flex:1;min-width:0;">'
       +'<div class="bulk-hist-date">'+esc(r.date||'—')+labelHtml+taskBadge+'</div>'
       +'<div class="bulk-hist-content hist-expandable" style="'+contentStyle+(hasMore?'cursor:pointer;':'')+'" data-full="'+fullAttr+'" data-preview="'+previewAttr+'" data-expanded="0" onclick="toggleHistExpand(this)">'
       +previewText+(hasMore?'<span class="hist-expand-hint"> [展開]</span>':'')
       +'</div>'
       +'</div>'
-      +'<button onclick="deleteBulkInterview(\''+esc(memberId)+'\',\''+esc(r.id||'')+'\')" title="削除" style="flex-shrink:0;background:none;border:none;color:#d1d5db;cursor:pointer;font-size:14px;padding:2px 4px;line-height:1;" onmouseover="this.style.color=\'#ef4444\'" onmouseout="this.style.color=\'#d1d5db\'">×</button>'
+      +'<div style="display:flex;flex-direction:column;gap:2px;align-items:flex-end;flex-shrink:0;">'
+      +editCtrl
+      +'<button onclick="deleteBulkInterview(\''+esc(memberId)+'\',\''+esc(r.id||'')+'\')" title="削除" style="background:none;border:none;color:#d1d5db;cursor:pointer;font-size:14px;padding:2px 4px;line-height:1;" onmouseover="this.style.color=\'#ef4444\'" onmouseout="this.style.color=\'#d1d5db\'">×</button>'
+      +'</div>'
       +'</div>';
   }).join('');
   html += '</div>';
@@ -6100,6 +6296,8 @@ function renderBulkCards(){
     card.setAttribute('draggable','true');
   });
   initBulkDrag();
+  // 下書き復元（カード再描画でも入力中の内容が消えないように・2026-06-24）
+  checked.forEach(function(m){ restoreBulkDraft(m.id); });
 }
 
 function buildBulkCard(m){
@@ -6132,11 +6330,11 @@ function buildBulkCard(m){
   var ivLeft = '<div class="bulk-mode-pane bulk-pane-interview" id="bpane_'+mid+'_interview">'
     +policyHtml
     +'<div style="display:flex;gap:8px;align-items:center;margin-bottom:4px;">'
-    +'<select class="form-select" id="blabel_'+mid+'" style="width:auto;flex-shrink:0;font-size:12px;">'
+    +'<select class="form-select" id="blabel_'+mid+'" style="width:auto;flex-shrink:0;font-size:12px;" onchange="onBulkDraftInput(\''+mid+'\')">'
     +labelOpts.map(function(l){ return '<option>'+l+'</option>'; }).join('')
     +'</select>'
     +'</div>'
-    +'<textarea class="form-textarea" id="bcontent_'+mid+'_interview" rows="2" placeholder="面談内容..."></textarea>'
+    +'<textarea class="form-textarea" id="bcontent_'+mid+'_interview" rows="2" placeholder="面談内容..." oninput="onBulkDraftInput(\''+mid+'\')"></textarea>'
     +'<div class="bulk-task-section">'
     +'<div class="bulk-task-header">📌 約束事・タスク</div>'
     +'<div id="btaskrows_iv_'+mid+'">'+buildTaskRow('iv_'+mid,0)+'</div>'
@@ -6195,6 +6393,8 @@ function onBulkTaskInput(mid, idx){
   if(val && !nextRow && idx < 4){
     container.insertAdjacentHTML('beforeend', buildTaskRow(mid, idx+1));
   }
+  // 下書き保存（mid は 'iv_<memberId>' 形式なので memberId を取り出す）
+  if(mid.indexOf('iv_')===0) onBulkDraftInput(mid.slice(3));
 }
 
 
@@ -6262,6 +6462,7 @@ function saveBulkRecord(memberId){
   });
 
   _bulkSaved[memberId] = true;
+  clearIvDraft(memberId, date); // 本保存できたので下書きを消す（2026-06-24）
   saveToCache();
   saveToGas();
   renderTasks();
@@ -6278,35 +6479,10 @@ function saveBulkRecord(memberId){
     histIvEl.innerHTML = '<div class="bulk-card-right-title">💬 面談の記録</div>' + buildHistRight(memberId, ivItems2, true);
   }
   showToast(m.name+'に保存しました');
-  updateBulkProgress();
   renderBulkSSA();
 }
 
-function updateBulkProgress(){
-  var active  = getBulkFiltered();
-  var saved   = active.filter(function(m){ return _bulkSaved[m.id]; }).length;
-  var checked = getBulkFiltered().filter(function(m){ return _bulkChecked[m.id]; }).length;
-  var el = document.getElementById('bulkProgressText');
-  if(el) el.textContent = saved+'人保存済み / '+checked+'人選択中';
-}
-
-function bulkSaveAllToGas(){
-  var url = getGasUrl();
-  if(!url){ showToast('設定でGAS URLを入力してください',true); return; }
-  var btn = document.getElementById('bulkGasBtn');
-  btn.textContent='保存中...'; btn.disabled=true;
-  var fd = new FormData();
-  fd.append('action','updateStudents');
-  fd.append('students',JSON.stringify(_members));
-  fetch(url,{method:'POST',body:fd})
-    .then(function(r){ return r.json(); })
-    .then(function(data){
-      if(data&&data.success){ showToast(_members.length+'人をGASに保存しました'); }
-      else { showToast('GAS保存エラー：'+(data&&data.error||'不明'),true); }
-    })
-    .catch(function(e){ showToast('GAS保存エラー：'+e.message,true); })
-    .finally(function(){ btn.textContent='💾 GASに保存'; btn.disabled=false; });
-}
+// updateBulkProgress / bulkSaveAllToGas は削除（川上さん指示 2026-06-24・上部保存ボタン廃止に伴う死にコード整理）
 
 
 
@@ -6782,7 +6958,7 @@ function buildIqCard(iq){
     +'</div>'
     +'<textarea class="iq-interview-memo" id="iqe_imemo_'+iq.id+'"'
     +' placeholder="入会面談メモ"'
-    +' onblur="saveIqCardAuto(this)">'+esc(iq.interviewMemo||'')+'</textarea>'
+    +' oninput="saveIqCardAuto(this)" onblur="saveIqCardAuto(this)">'+esc(iq.interviewMemo||'')+'</textarea>'
     +'</div>'
 
     /* 列2: 体験 */
