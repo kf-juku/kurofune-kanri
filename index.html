@@ -2148,6 +2148,13 @@ function calcGrade(bd){
 
 // ===== タブ切り替え =====
 function switchTab(tab){
+  // 機能②(川上さん指示 2026-06-26)：面談記録タブで未保存の書きかけがあるのに他タブへ移ろうとしたら確認。
+  // 現在が面談記録タブ(bulk)で、移動先がbulk以外で、書きかけがあるときだけ確認する。
+  var _curTab = '';
+  try{ _curTab = localStorage.getItem('sm_last_tab') || ''; }catch(e){}
+  if(_curTab==='bulk' && tab!=='bulk' && typeof hasUnsavedBulkInput==='function' && hasUnsavedBulkInput()){
+    if(!confirm('面談記録に保存していない内容があります。移動しますか？\n（書きかけは下書きとして残ります）')) return;
+  }
   try{ localStorage.setItem('sm_last_tab', tab); }catch(e){}
   ['list','bulk','inquiry','tasks','stats','scoreInput','scoreAnalysis','settings'].forEach(function(t){
     var p=document.getElementById('tabPanel'+cap(t));
@@ -6382,7 +6389,13 @@ function buildBulkCard(m){
     +'</div>';
 
   // 右カラムの履歴（モードに連動してJS側で切り替え）
-  var rightIv   = '<div id="bhistiv_'+mid+'">'+ buildHistRight(mid,ivItems,true) +'</div>';
+  // 機能①(2026-06-26)：サーバー確認ボタン＋結果表示エリア。押すとGASから取り直し未保存を検出。
+  var serverChkBtn = '<div style="display:flex;justify-content:flex-end;margin-bottom:6px;">'
+    +'<button class="bulk-server-check-btn" data-mid="'+mid+'" onclick="checkServerInterviews(this.dataset.mid)" '
+    +'style="font-size:11px;padding:3px 10px;border:1px solid #cbd5e1;border-radius:6px;background:#f8fafc;color:#334155;cursor:pointer;">'
+    +'☁︎ サーバー確認</button></div>';
+  var serverChkArea = '<div id="bsrvchk_'+mid+'" style="display:none;margin-bottom:8px;"></div>';
+  var rightIv   = '<div id="bhistiv_'+mid+'">'+ serverChkBtn + serverChkArea + buildHistRight(mid,ivItems,true) +'</div>';
 
   var saveBtn = '<button class="bulk-save-btn" id="bsavebtn_'+mid+'" data-mid="'+mid+'" onclick="saveBulkRecord(this.dataset.mid)">'
     +(saved?'💾 再保存':'💾 保存')+'</button>';
@@ -6465,6 +6478,63 @@ function toggleBulkTaskDue(id){
 }
 
 // ===== 保存 =====
+// 機能①(2026-06-26) サーバー確認：その生徒の面談記録をGASから取り直し、
+// ローカルにあってサーバーに無い記録を「未保存の疑い」として表示する。
+function checkServerInterviews(memberId){
+  var area = document.getElementById('bsrvchk_'+memberId);
+  if(!area) return;
+  var m = _members.find(function(x){ return x.id===memberId; });
+  if(!m){ return; }
+  var url = getGasUrl();
+  if(!url){ area.style.display='block'; area.innerHTML='<div style="font-size:12px;color:#92400e;">GAS未接続のため確認できません</div>'; return; }
+  area.style.display='block';
+  area.innerHTML='<div style="font-size:12px;color:#64748b;">☁︎ サーバーから取り直しています…</div>';
+  fetch(url+'?action=getOneStudentInterviews&id='+encodeURIComponent(memberId))
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if(!data || !data.success){
+        area.innerHTML='<div style="font-size:12px;color:#dc2626;">確認に失敗しました（'+((data&&data.error)||'不明')+'）</div>';
+        return;
+      }
+      var serverIvs = data.interviews || [];
+      var serverIds = {};
+      serverIvs.forEach(function(r){ if(r && r.id) serverIds[r.id]=true; });
+      // ローカルにあってサーバーに無い面談記録（約束事isTaskは除外＝本文のみ）
+      var localOnly = (m.interviews||[]).filter(function(r){
+        return r && !r.isTask && r.id && !serverIds[r.id];
+      });
+      var serverBody = serverIvs.filter(function(r){ return r && !r.isTask; }).length;
+      var html = '';
+      if(localOnly.length){
+        html += '<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:6px;padding:8px 10px;margin-bottom:6px;">'
+          +'<div style="font-size:12px;color:#92400e;font-weight:700;margin-bottom:4px;">⚠️ この端末にあり、サーバーに無い記録 '+localOnly.length+'件（未保存の疑い）</div>'
+          + localOnly.map(function(r){
+              return '<div style="font-size:12px;color:#92400e;border-top:1px solid #fde68a;padding-top:4px;margin-top:4px;">'
+                +esc(r.date||'—')+'：'+esc((r.content||'').slice(0,60))+((r.content||'').length>60?'…':'')
+                +' <button onclick="saveBulkRecordRetry(\''+esc(memberId)+'\')" style="font-size:11px;margin-left:4px;padding:2px 8px;border:1px solid #f59e0b;border-radius:4px;background:#fff;color:#92400e;cursor:pointer;">再保存</button>'
+                +'</div>';
+            }).join('')
+          +'</div>';
+      } else {
+        html += '<div style="font-size:12px;color:#065f46;background:#ecfdf5;border:1px solid #6ee7b7;border-radius:6px;padding:6px 10px;margin-bottom:6px;">✅ この端末の記録はすべてサーバーに保存されています</div>';
+      }
+      html += '<div style="font-size:11px;color:#64748b;">サーバー上の面談記録：'+serverBody+'件</div>';
+      area.innerHTML = html;
+    })
+    .catch(function(){
+      area.innerHTML='<div style="font-size:12px;color:#dc2626;">サーバー接続エラー</div>';
+    });
+}
+
+// 未保存の疑いがある記録を再保存（差分保存を呼ぶ）。保存後にサーバー確認を更新。
+function saveBulkRecordRetry(memberId){
+  var m = _members.find(function(x){ return x.id===memberId; });
+  if(!m) return;
+  saveOneStudentToGas(m).then(function(){
+    checkServerInterviews(memberId);
+  });
+}
+
 function saveBulkRecord(memberId){
   // 面談記録専用
   var contentEl = document.getElementById('bcontent_'+memberId+'_interview');
