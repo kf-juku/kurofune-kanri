@@ -1263,7 +1263,7 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
     <!-- 前回記録トグルを選択枠の外（カード一覧のすぐ上）に独立配置（2026-06-24 川上さん指示）。選択枠を閉じても押せる・面談記録の近くに配置 -->
     <div class="bulk-hist-bar">
       <span class="bulk-op-label">表示</span>
-      <button class="bulk-hist-toggle-btn" id="bulkHistToggleBtn" onclick="toggleAllBulkHist()">👁 前回記録を隠す</button><button class="bulk-hist-toggle-btn" id="allIvBtn" onclick="openAllInterviews()" style="margin-left:6px;" title="全生徒の面談記録をサーバーから取り直して新しい順に一覧表示">☁︎ 過去の一覧（サーバー確認）</button>
+      <button class="bulk-hist-toggle-btn" id="bulkHistToggleBtn" onclick="toggleAllBulkHist()">👁 前回記録を隠す</button><button class="bulk-hist-toggle-btn" id="allIvBtn" onclick="openAllInterviews()" style="margin-left:6px;" title="スプレッドシートに保存済みの面談記録を全員分・新しい順で確認。未保存があれば警告">☁︎ 過去の一覧（スプレッドシート確認）</button>
     </div>
     <div class="bulk-student-cards" id="bulkCards"></div>
   </div>
@@ -6491,7 +6491,7 @@ function openAllInterviews(){
     ov.innerHTML =
       '<div style="background:#fff;border-radius:12px;max-width:760px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);overflow:hidden;">'
       +'<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #e2e8f0;position:sticky;top:0;background:#fff;">'
-      +'<div style="font-weight:800;font-size:15px;color:#0f172a;">☁︎ 面談記録サーバー確認（全生徒・新しい順）</div>'
+      +'<div style="font-weight:800;font-size:15px;color:#0f172a;">☁︎ 面談記録 スプレッドシート確認（全生徒・新しい順）</div>'
       +'<button onclick="closeAllInterviews()" style="border:none;background:#f1f5f9;border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:16px;color:#475569;">×</button>'
       +'</div>'
       +'<div id="allIvBody" style="padding:14px 18px;max-height:calc(100vh - 140px);overflow-y:auto;"></div>'
@@ -6513,7 +6513,7 @@ function loadAllInterviews(){
   if(!body) return;
   var url = getGasUrl();
   if(!url){ body.innerHTML='<div style="font-size:13px;color:#92400e;padding:16px;">GAS未接続のため確認できません</div>'; return; }
-  body.innerHTML='<div style="font-size:13px;color:#64748b;padding:24px;text-align:center;">☁︎ スプレッドシートから全生徒の面談記録を取り直しています…</div>';
+  body.innerHTML='<div style="font-size:13px;color:#64748b;padding:24px;text-align:center;">☁︎ スプレッドシートから全生徒の面談記録を読み込んでいます…</div>';
   fetch(url+'?action=getAllInterviews&_t='+Date.now())
     .then(function(r){ return r.json(); })
     .then(function(data){
@@ -6538,14 +6538,14 @@ function loadAllInterviews(){
 
       var html = '';
       // 件数サマリー
-      html += '<div style="font-size:12px;color:#64748b;margin-bottom:10px;">サーバー上の面談記録：'+(data.total||serverIvs.length)+'件'
+      html += '<div style="font-size:12px;color:#64748b;margin-bottom:10px;">スプレッドシート上の面談記録：'+(data.total||serverIvs.length)+'件'
         +(serverIvs.length>_allIvLimit?'（新しい順に最新'+_allIvLimit+'件を表示）':'')+'</div>';
 
       // 保存漏れ警告（この端末）
       if(localOnly.length){
         html += '<div style="background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:12px 14px;margin-bottom:14px;">'
           +'<div style="font-size:13px;color:#9a3412;font-weight:800;margin-bottom:6px;">⚠️ この端末に未保存の疑い：'+localOnly.length+'件</div>'
-          +'<div style="font-size:11px;color:#9a3412;margin-bottom:6px;">この端末のローカルに記録があるのにサーバーに見つかりません。下の生徒カードで再保存してください。</div>'
+          +'<div style="font-size:11px;color:#9a3412;margin-bottom:6px;">この端末に記録があるのにスプレッドシートに見つかりません。下の生徒カードで再保存してください。</div>'
           + localOnly.slice(0,30).map(function(r){
               return '<div style="font-size:12px;color:#7c2d12;border-top:1px solid #fed7aa;padding-top:5px;margin-top:5px;">'
                 +'<b>'+esc(r.studentName||'—')+'</b> '+esc(r.date||'')+'：'+esc((r.content||'').slice(0,50))+((r.content||'').length>50?'…':'')
@@ -6557,7 +6557,7 @@ function loadAllInterviews(){
       // サーバー記録一覧（最新100件）
       var shown = serverIvs.slice(0, _allIvLimit);
       if(!shown.length){
-        html += '<div style="font-size:13px;color:#64748b;text-align:center;padding:24px;">サーバーに面談記録はありません</div>';
+        html += '<div style="font-size:13px;color:#64748b;text-align:center;padding:24px;">スプレッドシートに面談記録はありません</div>';
       } else {
         html += shown.map(function(r){
           var labelHtml = r.label ? '<span style="font-size:10px;background:#ede9fe;color:#6d28d9;border-radius:3px;padding:1px 6px;margin-left:6px;">'+esc(r.label)+'</span>' : '';
@@ -6573,7 +6573,7 @@ function loadAllInterviews(){
       body.innerHTML = html;
     })
     .catch(function(){
-      body.innerHTML='<div style="font-size:13px;color:#dc2626;padding:16px;">サーバー接続エラー</div>';
+      body.innerHTML='<div style="font-size:13px;color:#dc2626;padding:16px;">スプレッドシート接続エラー</div>';
     });
 }
 
