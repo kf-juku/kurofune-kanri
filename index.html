@@ -3536,7 +3536,7 @@ function saveDetailEduRecord(){
     postTaskToManager(
       '[' + (m.name||'') + '] ' + t.content,
       '',
-      t.due || '',
+      dueWith1300(t.due),
       '生徒対応',
       '面談_' + (m.name||''),
       t.id,
@@ -3805,11 +3805,13 @@ function restoreDetailDraft(mid){
 
 // 会員詳細・約束事行ビルダー
 function buildDtTaskRow(idx){
+  // 川上さん指示(2026-06-26)：約束事の期日は本日をデフォルト表示。空をなくし、送信時に13:00を付けてカレンダー連携条件(日付+時刻)を満たす
+  var _today = dateToStr(new Date());
   return '<div class="bulk-task-row" id="dttaskrow_iv_'+idx+'">'
     +'<span class="bulk-task-num">約束'+(idx+1)+'</span>'
     +'<div class="bulk-task-inputs">'
     +'<input class="form-input" type="text" id="dttask_iv_'+idx+'" placeholder="約束・タスク内容" data-idx="'+idx+'" oninput="onDtTaskInput(+this.dataset.idx)" style="flex:1;min-width:0;">'
-    +'<input class="form-input" type="date" id="dttaskdue_iv_'+idx+'" style="width:130px;flex-shrink:0;">'
+    +'<input class="form-input" type="date" id="dttaskdue_iv_'+idx+'" value="'+_today+'" style="width:130px;flex-shrink:0;">'
     +'</div>'
     +'</div>';
 }
@@ -3987,7 +3989,12 @@ function openEditRecordModal(type, id){
 
 function closeRecordModal(){ document.getElementById('recordOverlay').classList.remove('show'); }
 function toggleTaskDue(){ document.getElementById('taskDueRow').classList.toggle('show',document.getElementById('rIsTask').checked); }
-function toggleInterviewTaskDue(){ document.getElementById('interviewTaskDueRow').classList.toggle('show',document.getElementById('rIsTaskInterview').checked); }
+function toggleInterviewTaskDue(){
+  var on = document.getElementById('rIsTaskInterview').checked;
+  document.getElementById('interviewTaskDueRow').classList.toggle('show', on);
+  // 川上さん指示(2026-06-26)：約束事チェックON時、期日が空なら本日をデフォルトセット（送信時に13:00を付与してカレンダー連携）
+  if(on){ var due=document.getElementById('rDueInterview'); if(due && !due.value) due.value=dateToStr(new Date()); }
+}
 
 function saveRecord(){
   if(_detailIdx===null) return;
@@ -4026,7 +4033,7 @@ function saveRecord(){
         postTaskToManager(
           '[' + (m.name||'') + '] ' + content,
           '',
-          newDue || '',
+          dueWith1300(newDue),
           '生徒対応',
           '面談_' + (m.name||''),
           newId,
@@ -6376,11 +6383,13 @@ function buildBulkCard(m){
 }
 
 function buildTaskRow(mid, idx){
+  // 川上さん指示(2026-06-26)：約束事の期日は本日をデフォルト表示。空をなくし、送信時に13:00を付けてカレンダー連携条件(日付+時刻)を満たす
+  var _today = dateToStr(new Date());
   return '<div class="bulk-task-row" id="btaskrow_'+mid+'_'+idx+'">'
     +'<span class="bulk-task-num">約束'+(idx+1)+'</span>'
     +'<div class="bulk-task-inputs">'
     +'<input class="form-input" type="text" id="btask_'+mid+'_'+idx+'" placeholder="約束・タスク内容" data-mid="'+mid+'" data-idx="'+idx+'" oninput="onBulkTaskInput(this.dataset.mid,+this.dataset.idx)" style="flex:1;min-width:0;">'
-    +'<input class="form-input" type="date" id="btaskdue_'+mid+'_'+idx+'" style="width:140px;flex-shrink:0;">'
+    +'<input class="form-input" type="date" id="btaskdue_'+mid+'_'+idx+'" value="'+_today+'" style="width:140px;flex-shrink:0;">'
     +'</div>'
     +'</div>';
 }
@@ -6451,7 +6460,7 @@ function saveBulkRecord(memberId){
     postTaskToManager(
       '[' + (m.name||'') + '] ' + t.content,
       '',
-      t.due || '',
+      dueWith1300(t.due),
       '生徒対応',
       '面談_' + (m.name||''),
       t.id,
@@ -7750,6 +7759,18 @@ function normalizeDueDate(d){
   var m = dt.getMonth() + 1;
   var dd = dt.getDate();
   return y + '-' + (m < 10 ? '0' : '') + m + '-' + (dd < 10 ? '0' : '') + dd;
+}
+
+// 川上さん指示(2026-06-26)：面談約束事の期日に時刻13:00を付与する。
+// タスクマネージャーのカレンダー連携は「日付+時刻」の両方が揃って初めて発火するため、
+// 約束事(カテゴリ=生徒対応・固定)は13:00固定で送ってカレンダーに載せる。
+// 入力欄は本日デフォルトなので空はないが、念のため空なら本日を補う。時刻つき/Date文字列はそのまま返す。
+function dueWith1300(due){
+  var d = (due||'').trim();
+  if(!d) d = dateToStr(new Date());        // 空なら本日を補完
+  if(/T\d{2}:\d{2}/.test(d)) return d;     // すでに時刻つきならそのまま
+  if(/^\d{4}-\d{2}-\d{2}$/.test(d)) return d + 'T13:00'; // YYYY-MM-DD → 13:00付与
+  return d;                                 // 想定外形式はそのまま
 }
 
 // タスクマネージャーにタスクを送信（GETリクエスト・file://対応）
