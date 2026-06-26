@@ -3323,7 +3323,7 @@ function saveScore(){
       });
     });
   });
-  saveToCache(); saveToGas();
+  saveToCache(); saveOneStudentToGas(m);
   showToast('成績を保存しました');
 }
 
@@ -3624,7 +3624,7 @@ function deleteDetailEduRecord(recordId, btn){
   if(!confirm('この記録を削除しますか？')) return;
   var target = (m.interviews||[]).find(function(r){ return r.id === recordId; });
   m.interviews = (m.interviews||[]).filter(function(r){ return r.id !== recordId; });
-  saveToCache(); saveToGas();
+  saveToCache(); saveOneStudentToGas(m);
   if(target && target.isTask) deleteIqTaskFromGas(recordId);  // 約束事ならタスクマネージャーGASにも削除通知
   renderDetailEduHist(m, 'interview');
   renderTasks();
@@ -3638,7 +3638,7 @@ function deleteBulkInterview(memberId, recordId){
   if(!confirm('この記録を削除しますか？')) return;
   var target = (m.interviews||[]).find(function(r){ return r.id === recordId; });
   m.interviews = (m.interviews||[]).filter(function(r){ return r.id !== recordId; });
-  saveToCache(); saveToGas();
+  saveToCache(); saveOneStudentToGas(m);
   if(target && target.isTask) deleteIqTaskFromGas(recordId);  // 約束事ならタスクマネージャーGASにも削除通知
   renderTasks();
   // 右カラム履歴を再描画
@@ -3708,7 +3708,7 @@ function saveInlineHistEdit(memberId, recordId, where){
   if(!content){ showToast('内容を入力してください', true); return; }
   r.date = date; r.label = label; r.content = content;
   saveToCache();
-  if(where==='detail') saveOneStudentToGas(m); else saveToGas();
+  saveOneStudentToGas(m); // 対称修正(2026-06-26)：bulk側も差分保存に統一。元はelseで全件saveToGas()だった
   _rerenderHist(m, where);
   showToast('記録を更新しました');
 }
@@ -3906,7 +3906,7 @@ function deleteRecord(type,id){
     if(type==='interview') m.interviews=(m.interviews||[]).filter(function(r){ return r.id!==id; });
     else m.memos=(m.memos||[]).filter(function(r){ return r.id!==id; });
     if(type==='interview') renderInterviews(m); else renderMemos(m);
-    saveToCache(); saveToGas();
+    saveToCache(); saveOneStudentToGas(m);
     showToast('削除しました');
   });
 }
@@ -4199,7 +4199,7 @@ function saveAddTask(){
     due: due || ''
   });
   saveToCache();
-  saveToGas();
+  saveOneStudentToGas(m);
   closeAddTaskModal();
   renderTasks();
   showToast('タスクを追加しました');
@@ -4456,7 +4456,7 @@ function deleteInterviewTask(memberId, taskId){
   if(!m) return;
   if(!confirm('この約束事を削除しますか？')) return;
   m.interviews = (m.interviews||[]).filter(function(r){ return r.id !== taskId; });
-  saveToCache(); saveToGas();
+  saveToCache(); saveOneStudentToGas(m);
   deleteIqTaskFromGas(taskId);  // タスクマネージャーGASにも削除通知
   renderTasks();
   showToast('削除しました');
@@ -4467,7 +4467,7 @@ function completeInterviewTaskFromList(memberId, taskId){
   var r = (m.interviews||[]).find(function(r){ return r.id===taskId; });
   if(r){
     r.taskDone=true;
-    saveToCache(); saveToGas();
+    saveToCache(); saveOneStudentToGas(m);
     syncIqTaskStatusToGas(r);  // タスクマネージャーGASにも完了通知
     renderTasks(); showToast('約束事を完了しました');
   }
@@ -4492,7 +4492,7 @@ function deleteMemoTask(memberId, taskId){
     var m=_members.filter(function(m){ return m.id===memberId; })[0];
     if(!m) return;
     m.memos=(m.memos||[]).filter(function(r){ return r.id!==taskId; });
-    saveToCache(); saveToGas(); renderTasks();
+    saveToCache(); saveOneStudentToGas(m); renderTasks();
     showToast('削除しました');
   });
 }
@@ -4578,7 +4578,7 @@ function saveAdd(){
   };
   _members.push(m);
   closeAddModal(); renderList(); updateClassroomFilter();
-  saveToCache(); saveToGas();
+  saveToCache(); saveOneStudentToGas(m);
   showToast(name+'を追加しました');
 }
 
@@ -4914,8 +4914,17 @@ function saveToGas(){
   fd.append('students',JSON.stringify(_members));
   // 保存中フラグON → 完了後にリセット（GAS古いデータ取得による上書き防止）
   window._memberSaving = true;
-  fetch(url,{method:'POST',body:fd})
-    .then(function(){ window._lastGasSync = Date.now(); window._memberSaving = false; })
+  // 安全弁(川上さん指示 2026-06-26)：保存成否を検証する。data.successが真でなければエラー表示。
+  // 全件上書きが残る箇所（一括処理・生徒削除・自動退会など構造変更系）の保険。
+  return fetch(url,{method:'POST',body:fd})
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      window._lastGasSync = Date.now(); window._memberSaving = false;
+      if(!data || !data.success){
+        showToast('GAS保存に失敗しました（' + (data&&data.error||'不明') + '）', true);
+      }
+      return data;
+    })
     .catch(function(e){ window._memberSaving = false; console.warn('[GAS] 会員保存失敗:', e); showToast('GAS保存に失敗しました', true); });
 }
 
@@ -6497,7 +6506,7 @@ function saveBulkRecord(memberId){
   _bulkSaved[memberId] = true;
   clearIvDraft(memberId, date); // 本保存できたので下書きを消す（2026-06-24）
   saveToCache();
-  saveToGas();
+  saveOneStudentToGas(m);
   renderTasks();
   // フォームリセット
   if(contentEl) contentEl.value = '';
@@ -7863,7 +7872,7 @@ function deleteMemberTask(memberId, taskId, type){
   var idx = arr.findIndex(function(r){ return r.id===taskId; });
   if(idx===-1) return;
   arr.splice(idx, 1);
-  saveToCache(); saveToGas();
+  saveToCache(); saveOneStudentToGas(m);
   deleteMemberTaskFromGas(taskId);
   renderTasks();
   showToast('タスクを削除しました');
@@ -8206,7 +8215,7 @@ function fireIqTaskTrigger(trigger, apoDtStr, apoTimeStr, classroom, studentName
         apoDateTime: apoDateTimeKey
       });
       saveToCache();
-      saveToGas();
+      saveOneStudentToGas(m);
     } else {
       // 未紐付け: _iqTasksへ
       if(!_iqTasks) _iqTasks = [];
@@ -8738,7 +8747,7 @@ function enrollLater(){
   }
   _members.push(m);
   renderList(); updateClassroomFilter();
-  saveToCache(); saveToGas();
+  saveToCache(); saveOneStudentToGas(m);
   iq.enrolledToMember = true;
   saveInquiriesToCache();
   document.getElementById('enrollPopupOverlay').classList.remove('show');
@@ -8844,7 +8853,7 @@ function confirmEnrollProceed(){
   }
   _members.push(m);
   renderList(); updateClassroomFilter();
-  saveToCache(); saveToGas();
+  saveToCache(); saveOneStudentToGas(m);
   // 問い合わせ側に登録済みフラグ
   iq.enrolledToMember = true;
   saveInquiriesToCache();
