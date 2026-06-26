@@ -1211,7 +1211,7 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
   <div class="tab-header">
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
       <span class="tab-header-title">💬 面談記録</span>
-      <input type="date" id="bulkDate" style="font-size:13px;padding:4px 8px;border:1.5px solid #e2e8f0;border-radius:6px;font-family:inherit;">
+      <input type="date" id="bulkDate" onchange="saveBulkState()" style="font-size:13px;padding:4px 8px;border:1.5px solid #e2e8f0;border-radius:6px;font-family:inherit;">
       <!-- 川上さん指示(2026-06-24)：上部「保存」（全件同期）ボタンと進捗表示「○人保存済み/○人選択中」を削除。各カードの保存ボタンでGAS同期済みのため重複・誤解の元だった -->
     </div>
   </div>
@@ -1255,6 +1255,7 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
           <button class="bulk-seg-btn" onclick="bulkCheckAll()">全員チェック</button>
           <button class="bulk-seg-btn" onclick="bulkUncheckAll()">全解除</button>
         </div>
+        <button class="bulk-seg-btn" onclick="clearBulkSelection()" style="margin-left:6px;" title="選択・絞り込みを初期化（記入中の下書きは消えません）">🧹 クリア</button>
         <span style="flex:1;"></span>
         <button class="bulk-count-btn" onclick="toggleBulkSSA()">選択中 <span id="bulkSSACountBtn"></span>▼</button>
       </div>
@@ -5920,11 +5921,27 @@ function resetBulkFilters(){
   renderBulkChips();
   renderBulkCards();
 }
+// ===== 面談記録タブの状態保存・復元（2026-06-26 川上さん指示：タブを離れて戻ると選択が消え白くなる対策） =====
+var SM_BULK_STATE_KEY='sm_bulk_state';
+function saveBulkState(){try{var dt=(document.getElementById('bulkDate')||{}).value||'';localStorage.setItem(SM_BULK_STATE_KEY,JSON.stringify({checked:_bulkChecked,filter:_bulkFilter,date:dt}));}catch(e){}}
+function loadBulkState(){try{var raw=localStorage.getItem(SM_BULK_STATE_KEY);if(!raw)return null;var st=JSON.parse(raw);return (st&&typeof st==='object')?st:null;}catch(e){return null;}}
+function clearBulkState(){try{localStorage.removeItem(SM_BULK_STATE_KEY);}catch(e){}}
+function clearBulkSelection(){_bulkChecked={};_bulkSaved={};_bulkFilter={course:[],classroom:[],grade:[],youbi:[],time:[],option:['normal']};document.getElementById('bulkDate').value=dateToStr(new Date());clearBulkState();renderBulkChips();renderBulkSSA();showToast('選択と絞り込みをクリアしました');}
+
 function initBulkTab(){
-  _bulkChecked = {};
-  _bulkSaved   = {};
-  _bulkFilter  = { course:[], classroom:[], grade:[], youbi:[], time:[], option:['normal'] };
-  document.getElementById('bulkDate').value = dateToStr(new Date());
+  var st = loadBulkState();
+  if(st){
+    _bulkChecked = st.checked || {};
+    _bulkSaved   = {};
+    _bulkFilter  = st.filter || { course:[], classroom:[], grade:[], youbi:[], time:[], option:['normal'] };
+    ensureBulkFilter();
+    document.getElementById('bulkDate').value = st.date || dateToStr(new Date());
+  } else {
+    _bulkChecked = {};
+    _bulkSaved   = {};
+    _bulkFilter  = { course:[], classroom:[], grade:[], youbi:[], time:[], option:['normal'] };
+    document.getElementById('bulkDate').value = dateToStr(new Date());
+  }
   renderBulkChips();
   renderBulkSSA();
 }
@@ -6126,6 +6143,7 @@ function toggleBulkFilter(key, val){
   var idx = arr.indexOf(val);
   if(idx>=0) arr.splice(idx,1);
   else arr.push(val);
+  saveBulkState();
   renderBulkChips();
   renderBulkSSA();
 }
@@ -6242,14 +6260,17 @@ function renderBulkSSA(){
 function toggleBulkCheck(id){
   if(_bulkChecked[id]) delete _bulkChecked[id];
   else _bulkChecked[id] = true;
+  saveBulkState();
   renderBulkSSA();
 }
 function bulkCheckAll(){
   getBulkFiltered().forEach(function(m){ _bulkChecked[m.id]=true; });
+  saveBulkState();
   renderBulkSSA();
 }
 function bulkUncheckAll(){
   _bulkChecked={};
+  saveBulkState();
   renderBulkSSA();
 }
 
