@@ -880,7 +880,7 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
       <span class="sm-bulk-count" id="smBulkCount">0件選択</span>
       <div class="sm-bulk-sep"></div>
       <button class="sm-bulk-btn-danger" onclick="bulkDeleteTasks()">🗑 削除</button>
-      <button class="sm-bulk-clear" onclick="clearBulkSelection()">✕ 選択解除</button>
+      <button class="sm-bulk-clear" onclick="clearTaskBulkSelection()">✕ 選択解除</button>
     </div>
 
     <div id="bulk-action-bar-issue" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:1000;background:#1e293b;color:white;padding:10px 16px;align-items:center;gap:8px;font-size:13px;">
@@ -4256,7 +4256,7 @@ function updateSmBulkBar(){
   }
 }
 
-function clearBulkSelection(){
+function clearTaskBulkSelection(){
   _bulkSelectedTasks = {};
   updateSmBulkBar();
   renderTasks();
@@ -5903,7 +5903,7 @@ function onSettingsTabShow(){
 // ===== 一括入力モード =====
 var _bulkChecked = {};
 var _bulkSaved   = {};
-var _bulkFilter  = { course:[], classroom:[], grade:[], youbi:[], time:[], option:['normal'] };
+var _bulkFilter  = { course:[], classroom:[], grade:[], youbi:[], time:[], option:[] };
 
 var GRADE_ORDER = ['小1','小2','小3','小4','小5','小6','中1','中2','中3','高1','高2','高3'];
 
@@ -5917,7 +5917,8 @@ function closeBulkInput(){
 
 function resetBulkFilters(){
   // フィルターをデフォルト状態に戻す（日付はリセットしない）
-  _bulkFilter = { course:['juku'], classroom:[], grade:[], youbi:[], time:[], option:['normal'] };
+  // 川上さん指示(2026-06-26)：courseは判定側が'塾'/'CA'で見るため、旧形式'juku'やデフォルト絞り込みを入れない。面談記録は在籍全員が対象なのでoptionも空。
+  _bulkFilter = { course:[], classroom:[], grade:[], youbi:[], time:[], option:[] };
   renderBulkChips();
   renderBulkCards();
 }
@@ -5926,20 +5927,20 @@ var SM_BULK_STATE_KEY='sm_bulk_state';
 function saveBulkState(){try{var dt=(document.getElementById('bulkDate')||{}).value||'';localStorage.setItem(SM_BULK_STATE_KEY,JSON.stringify({checked:_bulkChecked,filter:_bulkFilter,date:dt}));}catch(e){}}
 function loadBulkState(){try{var raw=localStorage.getItem(SM_BULK_STATE_KEY);if(!raw)return null;var st=JSON.parse(raw);return (st&&typeof st==='object')?st:null;}catch(e){return null;}}
 function clearBulkState(){try{localStorage.removeItem(SM_BULK_STATE_KEY);}catch(e){}}
-function clearBulkSelection(){_bulkChecked={};_bulkSaved={};_bulkFilter={course:[],classroom:[],grade:[],youbi:[],time:[],option:['normal']};document.getElementById('bulkDate').value=dateToStr(new Date());clearBulkState();renderBulkChips();renderBulkSSA();showToast('選択と絞り込みをクリアしました');}
+function clearBulkSelection(){_bulkChecked={};_bulkSaved={};_bulkFilter={course:[],classroom:[],grade:[],youbi:[],time:[],option:[]};document.getElementById('bulkDate').value=dateToStr(new Date());clearBulkState();renderBulkChips();renderBulkSSA();showToast('選択と絞り込みをクリアしました');}
 
 function initBulkTab(){
   var st = loadBulkState();
   if(st){
     _bulkChecked = st.checked || {};
     _bulkSaved   = {};
-    _bulkFilter  = st.filter || { course:[], classroom:[], grade:[], youbi:[], time:[], option:['normal'] };
+    _bulkFilter  = st.filter || { course:[], classroom:[], grade:[], youbi:[], time:[], option:[] };
     ensureBulkFilter();
     document.getElementById('bulkDate').value = st.date || dateToStr(new Date());
   } else {
     _bulkChecked = {};
     _bulkSaved   = {};
-    _bulkFilter  = { course:[], classroom:[], grade:[], youbi:[], time:[], option:['normal'] };
+    _bulkFilter  = { course:[], classroom:[], grade:[], youbi:[], time:[], option:[] };
     document.getElementById('bulkDate').value = dateToStr(new Date());
   }
   renderBulkChips();
@@ -5970,11 +5971,13 @@ function toggleBulkFilterArea(){
 // _bulkFilterに新キーが欠けていても安全に動作させる
 function ensureBulkFilter(){
   if(!_bulkFilter.time)   _bulkFilter.time   = [];
-  if(!_bulkFilter.option) _bulkFilter.option = ['normal'];
+  if(!_bulkFilter.option) _bulkFilter.option = [];
   if(!_bulkFilter.youbi)  _bulkFilter.youbi  = [];
   if(!_bulkFilter.course) _bulkFilter.course = [];
   if(!_bulkFilter.classroom) _bulkFilter.classroom = [];
   if(!_bulkFilter.grade)  _bulkFilter.grade  = [];
+  // 川上さん指示(2026-06-26)：course判定側は'塾'/'CA'のみ有効。旧形式'juku'/'ca'がlocalStorageから復元されると全員弾かれるため除去する。
+  _bulkFilter.course = _bulkFilter.course.filter(function(c){ return c==='塾' || c==='CA'; });
 }
 
 function renderBulkChips(){
