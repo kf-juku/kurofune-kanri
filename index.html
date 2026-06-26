@@ -9662,6 +9662,7 @@ function switchCfgTab(tab){
 function checkAutoLeave(){
   var today = new Date(); today.setHours(0,0,0,0);
   var changed = false;
+  var changedMembers = []; // 事故防止(2026-06-27)：全件上書きでなく変更生徒だけ差分保存する
   (_members||[]).forEach(function(m){
     if(m.status==='在籍'||m.status==='休会'){
       // jukuLeave / caLeave のうち入力済みの日付が今日以前なら退会に変更
@@ -9680,6 +9681,7 @@ function checkAutoLeave(){
       if(shouldLeave){
         m.status = '退会';
         changed = true;
+        changedMembers.push(m);
         return; // 退会が休会より優先
       }
       // ===== 自動休会（退会と同ロジック・在籍のみ対象） =====
@@ -9696,17 +9698,26 @@ function checkAutoLeave(){
         if(shouldRest){
           m.status = '休会';
           changed = true;
+          changedMembers.push(m);
         }
       }
     }
   });
-  if(changed){ saveToCache(); renderList(); saveToGas(); }
+  if(changed){
+    saveToCache(); renderList();
+    // 事故防止(2026-06-27)：全件上書き(saveToGas)をやめ、状態が変わった生徒だけ差分保存する。
+    // 古いキャッシュで全件上書きされ面談記録が消える事故(2026-06-26)の再発防止。
+    changedMembers.forEach(function(cm){ if(typeof saveOneStudentToGas==='function') saveOneStudentToGas(cm); });
+  }
 }
 
 // ===== 初期化 =====
 window.addEventListener('load', function(){
   _members = loadFromCache();
-  checkAutoLeave();
+  // 事故防止(2026-06-27)：ここでの checkAutoLeave() は削除。
+  // 古いキャッシュ(localStorage)で自動退会判定→保存が走り、サーバーの最新を取る前に
+  // 不完全データで上書きする事故(2026-06-26 面談記録消失)の原因だったため。
+  // 自動退会判定は loadFromGas() がサーバー取得後に呼ぶ（既存4640行付近）ので、そちらに一本化する。
   // 毎日0時過ぎに自動退会チェック（ツールを開いたまま日付をまたいだ場合）
   (function scheduleAutoLeave(){
     var now = new Date();
