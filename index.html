@@ -5059,6 +5059,7 @@ function normalizeStudent(m){
     phone:          m.phone || m.contact || '',  // contact → phone に統合
     parent:         m.parent         || '',
     email:          m.email          || '',
+    forestaId:      m.forestaId      || '', // 生徒アカウント管理(2026-07-02川上さん承認)：KWTログインID。読取正規化のホワイトリストに必須
     scores:         m.scores         || {},
     leaveDate:      m.leaveDate      || '',
     leaveConfirmed: !!m.leaveConfirmed,
