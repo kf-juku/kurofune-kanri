@@ -336,6 +336,9 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
 .koma-alert-chip { display:inline-flex; align-items:center; gap:4px; padding:3px 10px; border-radius:20px; background:white; border:1.5px solid #f97316; font-size:11.5px; font-weight:600; color:#c2410c; cursor:pointer; transition:background 0.1s; }
 .koma-alert-chip:hover { background:#fff0e5; }
 .koma-alert-reason { font-size:10px; font-weight:400; color:#9a3412; margin-left:2px; }
+/* ===== フォレスタID未設定アラートバナー（生徒アカウント管理 2026-07-02・既存koma-alertと同デザイン） ===== */
+#forestaAlertBanner { display:none; background:#fff8f0; border:1.5px solid #f97316; border-radius:8px; margin:8px 12px 0; padding:8px 12px; }
+#forestaAlertBanner.has-alert { display:block; }
 .koma-table-disabled { opacity: 0.35; pointer-events: none; }
 /* 通常/演習/online 3択トグル */
 .koma-mode-radio { display: none; }
@@ -789,6 +792,10 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
       <div id="komaAlertBanner">
         <div class="koma-alert-title">⚠️ 受講設定が不足している生徒がいます（クリックで詳細へ）</div>
         <div class="koma-alert-list" id="komaAlertList"></div>
+      </div>
+      <div id="forestaAlertBanner">
+        <div class="koma-alert-title">⚠️ フォレスタID未設定の中学生がいます（クリックで詳細へ）</div>
+        <div class="koma-alert-list" id="forestaAlertList"></div>
       </div>
       <div class="filter-bar">
         <div class="filter-row">
@@ -2668,6 +2675,7 @@ function checkKomaRules(members){
 }
 
 function updateKomaAlertBanner(){
+  updateForestaAlertBanner(); // 生徒アカウント管理(2026-07-02)：フォレスタID未設定アラートも同タイミングで更新
   var banner = document.getElementById('komaAlertBanner');
   var list   = document.getElementById('komaAlertList');
   if(!banner || !list) return;
@@ -2683,6 +2691,38 @@ function updateKomaAlertBanner(){
     return '<span class="koma-alert-chip" onclick="openDetail('+idx+')">'
       + esc(a.name) + (a.grade ? '（'+esc(a.grade)+'）' : '')
       + '<span class="koma-alert-reason">' + esc(a.reasons.join(' / ')) + '</span>'
+      + '</span>';
+  }).join('');
+}
+
+// ===== フォレスタID未設定アラート（生徒アカウント管理 2026-07-02） =====
+// 対象：status=在籍 かつ attrJuku=true(塾生) かつ 中学生 かつ forestaId空
+function checkForestaIdMissing(members){
+  return (members||[]).filter(function(m){
+    if(m.status !== '在籍') return false;
+    if(!m.attrJuku) return false;
+    if(String(m.grade||'').indexOf('中') !== 0) return false;
+    return !String(m.forestaId||'').trim();
+  }).map(function(m){
+    return {id: m.id, name: m.name || '（名前未設定）', grade: m.grade || ''};
+  });
+}
+
+function updateForestaAlertBanner(){
+  var banner = document.getElementById('forestaAlertBanner');
+  var list   = document.getElementById('forestaAlertList');
+  if(!banner || !list) return;
+  var alerts = checkForestaIdMissing(_members||[]);
+  if(alerts.length === 0){
+    banner.classList.remove('has-alert');
+    list.innerHTML = '';
+    return;
+  }
+  banner.classList.add('has-alert');
+  list.innerHTML = alerts.map(function(a){
+    var idx = (_members||[]).findIndex(function(m){ return m.id === a.id; });
+    return '<span class="koma-alert-chip" onclick="openDetail('+idx+')">'
+      + esc(a.name) + (a.grade ? '（'+esc(a.grade)+'）' : '')
       + '</span>';
   }).join('');
 }
