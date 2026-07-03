@@ -73,6 +73,10 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
 .filter-chip { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 20px; border: 1.5px solid var(--border); background: white; font-size: 11.5px; cursor: pointer; font-family: inherit; color: var(--text-muted); transition: all 0.1s; white-space: nowrap; font-weight: 500; }
 .filter-chip:hover { border-color: var(--crimson-mid); background: var(--crimson-light); color: var(--crimson-dark); }
 .filter-chip.active { background: #fff0f0; color: var(--crimson-dark); border-color: var(--crimson); font-weight: 700; }
+.si-mode-seg { display:inline-flex; background:#eef1f5; border-radius:9px; padding:3px; gap:2px; flex-shrink:0; }
+.si-mode-btn { border:none; background:transparent; color:#64748b; font-size:12px; font-weight:600; padding:5px 14px; border-radius:7px; cursor:pointer; font-family:inherit; white-space:nowrap; transition:all 0.12s; }
+.si-mode-btn:hover { color:var(--crimson-dark); }
+.si-mode-btn.active { background:white; color:var(--crimson-dark); font-weight:700; box-shadow:0 1px 3px rgba(0,0,0,0.12); }
 .filter-search { border: 1.5px solid var(--border); border-radius: 20px; padding: 5px 13px; font-size: 12.5px; font-family: inherit; background: white; width: 180px; transition: all 0.15s; }
 .filter-search:focus { outline: none; border-color: var(--crimson); background: white; box-shadow: 0 0 0 3px rgba(198,0,11,0.1); }
 .filter-count { font-size: 13px; color: var(--crimson); margin-left: auto; white-space: nowrap; font-weight: 800; }
@@ -1033,9 +1037,11 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
       <div style="background:white;border-bottom:1px solid var(--border);padding:10px 16px;flex-shrink:0;">
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:nowrap;margin-bottom:8px;">
           <span style="font-size:14px;font-weight:800;color:var(--text);white-space:nowrap;">📝 成績一括入力</span>
-          <!-- 川上さん指示(2026-07-03)：モード切替はタイトル横・期間プルダウンと同じ行に横一列で置く（縦積み禁止） -->
-          <button class="filter-chip active" id="siModeBtn_test"  data-sikey="mode" data-sival="test"  onclick="setSiFilter(this)">定期テスト</button>
-          <button class="filter-chip"        id="siModeBtn_tsuki" data-sikey="mode" data-sival="tsuki" onclick="setSiFilter(this)">通知表＋観点別</button>
+          <!-- 川上さん指示(2026-07-03)：モード切替はタイトル横・横一列。デザインはA案セグメント型（絞り込みチップと役割を区別） -->
+          <div class="si-mode-seg">
+            <button class="si-mode-btn active" id="siModeBtn_test"  data-sikey="mode" data-sival="test"  onclick="setSiFilter(this)">定期テスト</button>
+            <button class="si-mode-btn"        id="siModeBtn_tsuki" data-sikey="mode" data-sival="tsuki" onclick="setSiFilter(this)">通知表＋観点別</button>
+          </div>
           <select id="siTest" onchange="renderScoreInput()" style="font-size:12px;border:1.5px solid var(--border);border-radius:7px;padding:5px 10px;font-family:inherit;background:white;">
             <option value="前期中間">前期中間</option><option value="前期期末">前期期末</option>
             <option value="後期中間">後期中間</option><option value="学年末">学年末</option>
@@ -2819,7 +2825,7 @@ function renderScoreInput(){
   if(mode==='test'){
     // ===== 定期テスト：数値スピナー =====
     html += '<div style="font-size:11px;color:#b45309;background:#fef3c7;border:1px solid #fde68a;border-radius:6px;padding:5px 12px;margin-bottom:8px;display:inline-block;">'
-          +'⚠️ 点数はすべて<strong>100点満点に換算</strong>して入力してください。半角数字で入力してください。'
+          +'⚠️ 点数はすべて<strong>100点満点に換算</strong>して入力してください。（小数点第一位を四捨五入）半角数字で入力してください。'
           +'</div>';
     html += '<table class="score-bulk-table" id="siBulkTable">';
     html += '<thead><tr><th class="sbi-name">名前</th><th class="sbi-grade">学年</th>';
@@ -3339,7 +3345,7 @@ function renderScoreTab(m){
     html += '<div class="d-section" style="margin-bottom:0;">';
     html += '<div class="d-section-title">'+g+' 定期テスト（点数）</div>';
     html += '<div style="font-size:11px;color:#b45309;background:#fef3c7;border:1px solid #fde68a;border-radius:5px;padding:4px 10px;margin-bottom:6px;">'
-          + '⚠️ 100点満点換算・半角数字で入力</div>';
+          + '⚠️ 100点満点換算（小数点第一位を四捨五入）・半角数字で入力</div>';
     html += '<div style="overflow-x:auto;"><table class="score-table" style="font-size:11px;">'
           + '<thead><tr><th style="min-width:70px;">教科</th>'
           + SCORE_TESTS.map(function(t){ return '<th style="min-width:48px;">'+t+'</th>'; }).join('')
