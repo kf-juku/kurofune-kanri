@@ -1037,7 +1037,7 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
             <option value="前期中間">前期中間</option><option value="前期期末">前期期末</option>
             <option value="後期中間">後期中間</option><option value="学年末">学年末</option>
           </select>
-          <select id="siSem" onchange="renderScoreInput()" style="font-size:12px;border:1.5px solid var(--border);border-radius:7px;padding:5px 10px;font-family:inherit;background:white;">
+          <select id="siSem" onchange="renderScoreInput()" style="display:none;font-size:12px;border:1.5px solid var(--border);border-radius:7px;padding:5px 10px;font-family:inherit;background:white;">
             <option value="前期">前期</option><option value="後期">後期</option>
           </select>
           <div style="margin-left:auto;display:flex;gap:6px;">
@@ -2802,6 +2802,10 @@ function renderScoreInput(){
   if(!testEl) return;
   var selTest = testEl.value;
   var mode    = _siFilter.mode; // 'test' | 'tsuki'
+  // 川上さん指示(2026-07-03)：モード連動でプルダウン切替（定期テスト→テスト名／通知表→前期・後期）
+  var semSelEl = document.getElementById('siSem');
+  if(testEl)   testEl.style.display   = (mode==='test')  ? '' : 'none';
+  if(semSelEl) semSelEl.style.display = (mode==='tsuki') ? '' : 'none';
   var members = getSiMembers();
 
   if(!members.length){
@@ -2826,7 +2830,7 @@ function renderScoreInput(){
       var mid=m.id, g=m.grade;
       var sc=(m.scores&&m.scores[g]&&m.scores[g][selTest])||{};
       html += '<tr data-mid="'+mid+'" data-grade="'+g+'">'
-        +'<td class="sbi-name-cell">'+esc(m.name||'')+'</td>'
+        +'<td class="sbi-name-cell" style="cursor:pointer;" title="クリックで詳細（成績タブ）を開く" onclick="siOpenDetail(\''+esc(mid)+'\')">'+esc(m.name||'')+'</td>'
         +'<td class="sbi-grade-cell">'+esc(g||'')+'</td>';
       subjs.forEach(function(key){
         var val=(sc[key]!=null)?sc[key]:'';
@@ -2889,7 +2893,7 @@ function renderScoreInput(){
       var hyotei  = semData.hyotei  || {};
 
       html += '<tr data-mid="'+mid+'" data-grade="'+g+'" class="si-row-tsuki">'
-        +'<td class="sbi-name-cell">'+esc(m.name||'')+'</td>'
+        +'<td class="sbi-name-cell" style="cursor:pointer;" title="クリックで詳細（成績タブ）を開く" onclick="siOpenDetail(\''+esc(mid)+'\')">'+esc(m.name||'')+'</td>'
         +'<td class="sbi-grade-cell">'+esc(g||'')+'</td>';
 
       // 一括ボタン列（2行・コンパクト）
@@ -2970,6 +2974,15 @@ function setSiFilter(btn){
     b.classList.toggle('active', b.dataset.sival===val);
   });
   renderScoreInput();
+}
+
+// 川上さん指示(2026-07-03)：一括入力の名前クリックで詳細パネルの成績タブを開く（ファイル通知の既存パターンを踏襲）
+function siOpenDetail(mid){
+  var idx = -1;
+  for(var i=0;i<_members.length;i++){ if(_members[i].id===mid){ idx=i; break; } }
+  if(idx < 0) return;
+  openDetail(idx);
+  setTimeout(function(){ switchDetailTab('score'); }, 300);
 }
 
 function getSiMembers(){
@@ -3247,10 +3260,19 @@ function renderScoreTab(m){
   if(!el) return;
   var scores = m.scores || {};
 
-  // この生徒の学年（中1〜中3）のみ対象。学年未設定の場合は全学年表示
-  var memberGrade = m.grade && SCORE_GRADES.indexOf(m.grade) >= 0 ? [m.grade] : SCORE_GRADES;
+  // 川上さん指示(2026-07-03)：3学年分（中1〜中3）を常に全部描画し、切替ボタンで表示だけ切り替える。
+  // 全学年の入力欄をDOMに常駐させることで、saveScoreのnull上書きによる非表示学年のデータ消失を防ぐ（表示切替はCSSのみ）
+  var memberGrade = SCORE_GRADES;
+  var defaultScGrade = (m.grade && SCORE_GRADES.indexOf(m.grade) >= 0) ? m.grade : '中1';
 
   var html = '<div style="display:flex;flex-direction:column;gap:18px;">';
+
+  html += '<div style="display:flex;gap:4px;align-items:center;justify-content:flex-end;">'
+        + '<span style="font-size:11px;font-weight:700;color:var(--text-light);">学年</span>'
+        + SCORE_GRADES.map(function(g){
+            return '<button class="filter-chip" id="scGradeBtn_'+g+'" onclick="scSetGrade(\''+g+'\')">'+g+'</button>';
+          }).join('')
+        + '</div>';
 
   // ===== 通知表セクション =====
   html += '<div class="d-section" style="margin-bottom:0;">';
@@ -3259,6 +3281,7 @@ function renderScoreTab(m){
         + '<button class="btn-small" onclick="saveScore()">💾 保存</button></div>';
 
   memberGrade.forEach(function(g){
+    html += '<div class="sc-gblock" data-scg="'+g+'">';
     // テーブル：縦=教科、横=前期(知技・思判表・主体・評定) / 後期(同)
     html += '<div style="font-size:12px;font-weight:700;color:var(--text);background:#f0f9ff;border-left:3px solid #3b82f6;padding:4px 10px;margin-bottom:4px;border-radius:0 5px 5px 0;">'+esc(g)+'　通知表</div>';
     html += '<div style="overflow-x:auto;"><table class="score-table" style="font-size:11px;">'
@@ -3307,11 +3330,13 @@ function renderScoreTab(m){
       html += '</tr>';
     });
     html += '</tbody></table></div>';
+    html += '</div>';
   });
   html += '</div>';
 
   // ===== 定期テストセクション（点数） =====
   memberGrade.forEach(function(g){
+    html += '<div class="sc-gblock" data-scg="'+g+'">';
     html += '<div class="d-section" style="margin-bottom:0;">';
     html += '<div class="d-section-title">'+g+' 定期テスト（点数）</div>';
     html += '<div style="font-size:11px;color:#b45309;background:#fef3c7;border:1px solid #fde68a;border-radius:5px;padding:4px 10px;margin-bottom:6px;">'
@@ -3331,6 +3356,7 @@ function renderScoreTab(m){
       html += '</tr>';
     });
     html += '</tbody></table></div></div>';
+    html += '</div>';
   });
 
   html += '<div style="text-align:right;margin-top:4px;">'
@@ -3338,13 +3364,26 @@ function renderScoreTab(m){
         + '</div>';
   html += '</div>';
   el.innerHTML = html;
+  scSetGrade(defaultScGrade);
+}
+
+// 川上さん指示(2026-07-03)：成績タブの学年切替（表示のみ切替。非表示学年の入力欄もDOMに残し、保存時のnull上書き消失を防ぐ）
+function scSetGrade(g){
+  document.querySelectorAll('#dtScoreContent .sc-gblock').forEach(function(b){
+    b.style.display = (b.getAttribute('data-scg')===g) ? '' : 'none';
+  });
+  SCORE_GRADES.forEach(function(x){
+    var btn = document.getElementById('scGradeBtn_'+x);
+    if(btn) btn.classList.toggle('active', x===g);
+  });
 }
 
 function saveScore(){
   if(_detailIdx===null) return;
   var m = _members[_detailIdx];
   if(!m.scores) m.scores = {};
-  var targetGrades = m.grade && SCORE_GRADES.indexOf(m.grade) >= 0 ? [m.grade] : SCORE_GRADES;
+  // 川上さん指示(2026-07-03)：3学年分を保存対象にする（renderScoreTabが3学年分の入力欄を常に描画している前提とセット）
+  var targetGrades = SCORE_GRADES;
   targetGrades.forEach(function(g){
     if(!m.scores[g]) m.scores[g] = {};
     // 通知表：前期/後期ごとに hyouka（観点別）＋ hyotei（評定）
