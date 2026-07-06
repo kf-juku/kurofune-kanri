@@ -5386,7 +5386,9 @@ function attachKomaRadioToggle(container){
   });
 }
 
-function buildKomaTableHtml(defMap, komas, disabled, simpleMode){
+function buildKomaTableHtml(defMap, komas, disabled, simpleMode, idPrefix){
+  // 川上さん報告(2026-07-06)：入会確約モーダルの通塾コマ無反応バグ対策。同一IDのコマ表が詳細パネル・会員追加・入会確約の3か所に生成され、label forが最初の要素にしか効かないため、wrapごとにIDを一意化する
+  var pfx = idPrefix || '';
   var dis = disabled ? ' disabled' : '';
   var CR_STYLE = {
     '北久里浜': 'background:#f0f9ff;border:1.5px solid #bae6fd;border-radius:8px;padding:8px;flex:1;min-width:0;overflow-x:auto;',
@@ -5442,8 +5444,8 @@ function buildKomaTableHtml(defMap, komas, disabled, simpleMode){
           var badge = SAT_BADGE[def.satType] || {bg:'#f3f4f6',color:'#374151',label:def.satType};
           var satChecked = (!disabled && existing) ? 'checked' : '';
           col += '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;">'
-            + '<input class="koma-cb" type="checkbox" id="koma_'+def.id+'" '+satChecked+dis+'>'
-            + '<label class="koma-label" for="koma_'+def.id+'"'+(disabled?' style="opacity:0.3;cursor:default;"':'')+'>✓</label>'
+            + '<input class="koma-cb" type="checkbox" id="koma_'+pfx+def.id+'" '+satChecked+dis+'>'
+            + '<label class="koma-label" for="koma_'+pfx+def.id+'"'+(disabled?' style="opacity:0.3;cursor:default;"':'')+'>✓</label>'
             + '<span style="font-size:8px;background:'+badge.bg+';color:'+badge.color+';padding:0 2px;border-radius:3px;font-weight:700;white-space:nowrap;text-align:center;line-height:1.2;display:block;max-width:32px;overflow:hidden;text-overflow:ellipsis;">'+( def.satLabel ? def.satLabel : badge.label )+'</span>'
             + '</div>';
         } else {
@@ -5466,22 +5468,22 @@ function buildKomaTableHtml(defMap, komas, disabled, simpleMode){
           var isNormal  = !disabled && !!existing && !existing.online && !existEn;
           // radio値
           var modeVal = isOnline ? 'online' : (isEnshuu ? 'enshuu' : (isNormal ? 'normal' : ''));
-          var rdName = 'komamode_'+def.id;
+          var rdName = 'komamode_'+pfx+def.id;
           if(!simpleMode){
             // input + label 構造（CSS :checked + label セレクタ動作に必須）
             col += '<div style="display:flex;flex-direction:column;align-items:center;gap:1px;">'
-              + '<input type="radio" name="'+rdName+'" id="komamode_n_'+def.id+'" class="koma-mode-radio" value="normal"'+(modeVal==='normal'?' checked':'')+dis+'>'
-              + '<label class="koma-mode-label koma-mode-normal" for="komamode_n_'+def.id+'" title="通常">通</label>'
-              + '<input type="radio" name="'+rdName+'" id="komamode_e_'+def.id+'" class="koma-mode-radio" value="enshuu"'+(modeVal==='enshuu'?' checked':'')+dis+'>'
-              + '<label class="koma-mode-label koma-mode-enshuu" for="komamode_e_'+def.id+'" title="演習回">演</label>'
-              + '<input type="radio" name="'+rdName+'" id="komamode_o_'+def.id+'" class="koma-mode-radio" value="online"'+(modeVal==='online'?' checked':'')+dis+'>'
-              + '<label class="koma-mode-label koma-mode-online" for="komamode_o_'+def.id+'" title="オンライン"><svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11l-4 4z"/></svg></label>'
+              + '<input type="radio" name="'+rdName+'" id="komamode_n_'+pfx+def.id+'" class="koma-mode-radio" value="normal"'+(modeVal==='normal'?' checked':'')+dis+'>'
+              + '<label class="koma-mode-label koma-mode-normal" for="komamode_n_'+pfx+def.id+'" title="通常">通</label>'
+              + '<input type="radio" name="'+rdName+'" id="komamode_e_'+pfx+def.id+'" class="koma-mode-radio" value="enshuu"'+(modeVal==='enshuu'?' checked':'')+dis+'>'
+              + '<label class="koma-mode-label koma-mode-enshuu" for="komamode_e_'+pfx+def.id+'" title="演習回">演</label>'
+              + '<input type="radio" name="'+rdName+'" id="komamode_o_'+pfx+def.id+'" class="koma-mode-radio" value="online"'+(modeVal==='online'?' checked':'')+dis+'>'
+              + '<label class="koma-mode-label koma-mode-online" for="komamode_o_'+pfx+def.id+'" title="オンライン"><svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11l-4 4z"/></svg></label>'
               + '</div>';
           } else {
             // simpleMode（CAテーブル）: 従来通りチェックのみ
             var checked = (!disabled && existing && !existing.online) ? 'checked' : '';
-            col += '<input class="koma-cb" type="checkbox" id="koma_'+def.id+'" '+checked+dis+'>'
-              + '<label class="koma-label ca-koma" for="koma_'+def.id+'"'+(disabled?' style="opacity:0.3;cursor:default;"':'')+'>✓</label>';
+            col += '<input class="koma-cb" type="checkbox" id="koma_'+pfx+def.id+'" '+checked+dis+'>'
+              + '<label class="koma-label ca-koma" for="koma_'+pfx+def.id+'"'+(disabled?' style="opacity:0.3;cursor:default;"':'')+'>✓</label>';
           }
         }
         col += '</td>';
@@ -8483,11 +8485,11 @@ function renderKomaForWrap(wrapId, cls, attrJuku, attrCa, komas){
   var html = '';
   if(attrJuku){
     html += '<div style="font-size:11px;font-weight:700;color:#6b7280;margin:6px 0 3px;">🏫 進学塾コマ</div>';
-    html += buildKomaTableHtml({'北久里浜': KOMA_DEF['北久里浜']||[], '久里浜': KOMA_DEF['久里浜']||[]}, komas||[], false);
+    html += buildKomaTableHtml({'北久里浜': KOMA_DEF['北久里浜']||[], '久里浜': KOMA_DEF['久里浜']||[]}, komas||[], false, false, wrapId+'_');
   }
   if(attrCa){
     html += '<div style="font-size:11px;font-weight:700;color:#6b7280;margin:6px 0 3px;">💻 CAコマ</div>';
-    html += buildKomaTableHtml({'北久里浜': CA_KOMA_DEF['北久里浜']||[], '久里浜': CA_KOMA_DEF['久里浜']||[]}, komas||[], false, true);
+    html += buildKomaTableHtml({'北久里浜': CA_KOMA_DEF['北久里浜']||[], '久里浜': CA_KOMA_DEF['久里浜']||[]}, komas||[], false, true, wrapId+'_');
   }
   if(!attrJuku && !attrCa) html = '<span style="color:#9ca3af;font-size:12px;">コースを選択してください</span>';
   wrap.innerHTML = html;
@@ -8509,19 +8511,20 @@ function renderAddKoma(){
 function getKomasFromWrap(wrapId){
   var wrap = document.getElementById(wrapId);
   if(!wrap) return [];
+  var pfx = wrapId + '_'; // renderKomaForWrapと同じプレフィックス（ID一意化・2026-07-06）
   var komas = [];
   // 塾コマ（平日ラジオ+土曜チェック統合）
   ['北久里浜','久里浜'].forEach(function(cls){
     (KOMA_DEF[cls]||[]).forEach(function(def){
       if(def.satType){
-        var cb = wrap.querySelector('#koma_'+def.id);
+        var cb = wrap.querySelector('#koma_'+pfx+def.id);
         if(cb && cb.checked){
           komas.push({id:def.id, classroom:cls, youbi:def.youbi, time:def.time, satType:def.satType});
         }
       } else {
-        var rdNorm = wrap.querySelector('#komamode_n_'+def.id);
-        var rdEn   = wrap.querySelector('#komamode_e_'+def.id);
-        var rdOl   = wrap.querySelector('#komamode_o_'+def.id);
+        var rdNorm = wrap.querySelector('#komamode_n_'+pfx+def.id);
+        var rdEn   = wrap.querySelector('#komamode_e_'+pfx+def.id);
+        var rdOl   = wrap.querySelector('#komamode_o_'+pfx+def.id);
         if(rdNorm && rdNorm.checked){
           komas.push({id:def.id, classroom:cls, youbi:def.youbi, time:def.time, online:false});
         } else if(rdEn && rdEn.checked){
@@ -8535,8 +8538,8 @@ function getKomasFromWrap(wrapId){
   // CAコマ（チェックボックス）
   ['北久里浜','久里浜'].forEach(function(cls){
     (CA_KOMA_DEF[cls]||[]).forEach(function(def){
-      var cb = wrap.querySelector('#koma_'+def.id);
-      var ol = wrap.querySelector('#komaol_'+def.id);
+      var cb = wrap.querySelector('#koma_'+pfx+def.id);
+      var ol = wrap.querySelector('#komaol_'+pfx+def.id);
       var isOnline = !!(ol && ol.checked);
       var isNormal = !!(cb && cb.checked);
       if(isNormal || isOnline){
