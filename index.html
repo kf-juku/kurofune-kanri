@@ -8984,12 +8984,13 @@ function enrollMergeSelect(memberId){
     prevJukuEnroll: m.jukuEnroll||'', prevJukuLeave: m.jukuLeave||'',
     prevCaEnroll: m.caEnroll||'', prevCaLeave: m.caLeave||''
   };
-  // 既存会員の情報をモーダルに事前反映（モーダルの最終状態＝最新の全量。機能仕様書「統合時の保存」）
-  var set = function(id, v){ var el = document.getElementById(id); if(el && v) el.value = v; };
+  // 既存会員の情報をモーダルに事前反映（機能仕様書「統合時の保存」）
+  // 【バグ修正 2026-07-06d 川上さん報告】入力済みの値を上書きしない（空欄のみ補完）。統合クリック前にモーダルへ入力した内容が消えていた
+  var set = function(id, v){ var el = document.getElementById(id); if(el && v && !el.value) el.value = v; };
   set('enrollName', m.name); set('enrollReading', m.reading); set('enrollGrade', m.grade);
   set('enrollGender', m.gender); set('enrollParent', m.parent); set('enrollContact', m.contact || m.phone);
   set('enrollSchool', m.school); set('enrollTargetSchool', m.targetSchool);
-  if(m.classroom){ var clSel = document.getElementById('enrollClassroom'); if(clSel) clSel.value = m.classroom; }
+  if(m.classroom){ var clSel = document.getElementById('enrollClassroom'); if(clSel && !clSel.value) clSel.value = m.classroom; }
   var cbJ = document.getElementById('enrollAttrJuku');
   var cbC = document.getElementById('enrollAttrCa');
   if(cbJ){ cbJ.checked = cbJ.checked || !!m.attrJuku; cbJ.disabled = wasJuku; if(wasJuku) cbJ.title = '在籍中のため外せません（退会は詳細パネルから）'; }
@@ -9001,7 +9002,10 @@ function enrollMergeSelect(memberId){
   var dc = document.getElementById('enrollCaEnroll');
   if(dc) dc.value = wasCa ? (m.caEnroll||todayStr) : todayStr;
   updateEnrollDates();
-  renderEnrollKoma(m.komas||[]);
+  // 【バグ修正 2026-07-06d 川上さん報告】モーダルで選択済みのコマを消さない：現在の選択＋既存会員のコマの和集合で再描画
+  var curKomas = getKomasFromWrap('enrollKomaWrap');
+  (m.komas||[]).forEach(function(k){ if(!curKomas.some(function(c){ return c.id===k.id; })) curKomas.push(k); });
+  renderEnrollKoma(curKomas);
   renderEnrollMergeBar();
 }
 
