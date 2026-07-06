@@ -1715,6 +1715,8 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
         <span style="font-size:12px;color:#9ca3af;">問い合わせ時の情報を引き継いでいます。不足している項目を確認してください。</span>
       </p>
 
+      <div id="enrollMergeBar"></div>
+
       <div class="enroll-section-title">基本情報</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
         <div class="form-group" style="margin:0;">
@@ -8495,12 +8497,13 @@ function renderKomaForWrap(wrapId, cls, attrJuku, attrCa, komas){
   wrap.innerHTML = html;
   attachKomaRadioToggle(wrap);
 }
-function renderEnrollKoma(){
+function renderEnrollKoma(komas){
+  // komas省略時は空（新規登録）。統合モードでは既存会員のコマを渡して選択済みで描画する（2026-07-06）
   var cls = document.getElementById('enrollClassroom') ? document.getElementById('enrollClassroom').value : '';
   var attrJuku = document.getElementById('enrollAttrJuku') && document.getElementById('enrollAttrJuku').checked;
   var attrCa   = document.getElementById('enrollAttrCa')   && document.getElementById('enrollAttrCa').checked;
   // 土曜コマはKOMA_DEFに統合済みのため、renderKomaForWrapで自動表示
-  renderKomaForWrap('enrollKomaWrap', cls, attrJuku, attrCa, []);
+  renderKomaForWrap('enrollKomaWrap', cls, attrJuku, attrCa, komas||[]);
 }
 function renderAddKoma(){
   var cls = document.getElementById('addClassroom') ? document.getElementById('addClassroom').value : '';
@@ -8882,9 +8885,257 @@ function openEnrollPopup(iq){
     return '<option value="'+esc(c)+'"'+(iq.classroom===c?' selected':'')+'>'+esc(c)+'</option>';
   }).join('');
   renderEnrollKoma();
+  // 既存会員との統合（機能仕様書「既存会員との統合」・2026-07-06 川上さん承認）
+  enrollMergeReset();
+  renderEnrollMergeBar();
   document.getElementById('enrollPopupOverlay').classList.add('show');
 }
+
+// ===== 既存会員との統合（機能仕様書「既存会員との統合」確定仕様 2026-07-06・川上さん承認） =====
+// 用語は「統合」（川上さん決定 2026-07-06）。候補スコアはKurofune-LINEのcandidateScore_を流用。
+var _enrollMergeTarget = null; // {id, wasActiveJuku, wasActiveCa, prevJukuEnroll, prevJukuLeave, prevCaEnroll, prevCaLeave}
+
+// コースが「現在在籍中」か。在籍中コースは統合モードで外せない（退会は詳細パネルの既存手続きへ・川上さん決定 2026-07-06）
+function enrollCourseActive_(m, course){
+  if(!m || m.status === '退会') return false;
+  var today = dateToStr(new Date());
+  if(course === 'juku') return !!m.attrJuku && !(m.jukuLeave && m.jukuLeave <= today);
+  return !!m.attrCa && !(m.caLeave && m.caLeave <= today);
+}
+
+// 統合候補スコア（Kurofune-LINE candidateScore_ 流用 2026-07-06）：フル一致+学年=100 > フル一致=80 > 名前部分=50 > 読み部分=45 > 姓2文字=30
+function enrollMergeScore_(name, reading, grade, m){
+  var fname = String(name||'').replace(/\s/g,'');
+  var fread = String(reading||'').replace(/\s/g,'');
+  if(!fname && !fread) return 0;
+  var mname = String(m.name||'').replace(/\s/g,'');
+  var mread = String(m.reading||'').replace(/\s/g,'');
+  var gradeMatch = !!(grade && m.grade && grade === m.grade);
+  if((fname && (fname === mname || (mread && fname === mread))) || (fread && mread && fread === mread)){
+    return gradeMatch ? 100 : 80;
+  }
+  if(fname && mname && (mname.indexOf(fname) >= 0 || fname.indexOf(mname) >= 0)) return 50;
+  if(fname && mread && (mread.indexOf(fname) >= 0 || fname.indexOf(mread) >= 0)) return 45;
+  if(fread && mread && (mread.indexOf(fread) >= 0 || fread.indexOf(mread) >= 0)) return 45;
+  if(fname && fname.length >= 2 && mname && mname.indexOf(fname.slice(0,2)) === 0) return 30;
+  return 0;
+}
+
+function enrollMergeCandidates_(limit){
+  var name    = document.getElementById('enrollName')    ? document.getElementById('enrollName').value    : '';
+  var reading = document.getElementById('enrollReading') ? document.getElementById('enrollReading').value : '';
+  var grade   = document.getElementById('enrollGrade')   ? document.getElementById('enrollGrade').value   : '';
+  var scored = (_members||[]).map(function(m){ return { m:m, score: enrollMergeScore_(name, reading, grade, m) }; })
+    .filter(function(x){ return x.score > 0; })
+    .sort(function(a,b){ return b.score - a.score; });
+  return limit ? scored.slice(0, limit) : scored;
+}
+
+function enrollMergeBadges_(m){
+  var st = m.status||'';
+  var stBg = st==='在籍' ? '#dcfce7;color:#166534' : (st==='休会' ? '#fef3c7;color:#92400e' : '#fee2e2;color:#991b1b');
+  var b = '<span style="font-size:10px;background:#e5e7eb;color:#374151;border-radius:4px;padding:1px 5px;">'+esc(m.grade||'学年未設定')+'</span>';
+  if(m.classroom) b += '<span style="font-size:10px;background:#e5e7eb;color:#374151;border-radius:4px;padding:1px 5px;">'+esc(m.classroom)+'</span>';
+  b += '<span style="font-size:10px;background:'+stBg+';border-radius:4px;padding:1px 5px;font-weight:700;">'+esc(st)+'</span>';
+  if(m.attrJuku) b += '<span style="font-size:10px;">🏫</span>';
+  if(m.attrCa)   b += '<span style="font-size:10px;">💻</span>';
+  return b;
+}
+
+function renderEnrollMergeBar(){
+  var bar = document.getElementById('enrollMergeBar');
+  if(!bar) return;
+  if(_enrollMergeTarget){
+    var mt = (_members||[]).find(function(x){ return x.id===_enrollMergeTarget.id; });
+    var lockNote = (_enrollMergeTarget.wasActiveJuku || _enrollMergeTarget.wasActiveCa)
+      ? '<div style="font-size:11px;color:#166534;width:100%;">在籍中のコースは外せません。退会がある場合は登録後に詳細パネルの「退会・休会手続き」から行ってください。</div>' : '';
+    bar.innerHTML = '<div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:8px;padding:8px 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
+      + '<span style="font-size:13px;font-weight:700;color:#166534;">🔗 「'+esc(mt?mt.name:'')+'」の既存レコードに統合します（新規レコードは作りません）</span>'
+      + '<button type="button" class="btn-secondary" style="font-size:11px;padding:3px 10px;margin-left:auto;" onclick="enrollMergeClear()">統合をやめて新規登録に戻す</button>'
+      + lockNote
+      + '</div>';
+    return;
+  }
+  var cands = enrollMergeCandidates_(3);
+  var inner = '';
+  if(cands.length){
+    inner += '<div style="font-size:12px;font-weight:700;color:#92400e;">⚠️ 既存会員に統合候補がいます。同一人物なら「統合」を選んでください（レコード二重化防止）</div>';
+    inner += cands.map(function(x){
+      var m = x.m;
+      var strong = x.score >= 100 ? '<span style="font-size:10px;background:#dc2626;color:#fff;border-radius:4px;padding:1px 5px;font-weight:700;">有力候補</span>' : '';
+      return '<div style="display:flex;align-items:center;gap:6px;padding:3px 0;flex-wrap:wrap;">'
+        + '<span style="font-weight:700;font-size:13px;">'+esc(m.name||'')+'</span>'
+        + enrollMergeBadges_(m) + strong
+        + '<button type="button" class="btn-secondary" style="font-size:11px;padding:2px 10px;margin-left:auto;" onclick="enrollMergeSelect(\''+esc(m.id)+'\')">この会員に統合</button>'
+        + '</div>';
+    }).join('');
+  }
+  inner += '<div style="margin-top:4px;"><button type="button" class="btn-secondary" style="font-size:11px;padding:3px 10px;" onclick="openEnrollMergeSearch()">🔍 会員を検索して統合</button></div>';
+  bar.innerHTML = '<div style="background:'+(cands.length?'#fffbeb;border:1.5px solid #fcd34d':'#f9fafb;border:1.5px solid var(--border)')+';border-radius:8px;padding:8px 12px;">'+inner+'</div>';
+}
+
+function enrollMergeSelect(memberId){
+  var m = (_members||[]).find(function(x){ return x.id===memberId; });
+  if(!m) return;
+  var wasJuku = enrollCourseActive_(m,'juku');
+  var wasCa   = enrollCourseActive_(m,'ca');
+  _enrollMergeTarget = {
+    id: m.id, wasActiveJuku: wasJuku, wasActiveCa: wasCa,
+    prevJukuEnroll: m.jukuEnroll||'', prevJukuLeave: m.jukuLeave||'',
+    prevCaEnroll: m.caEnroll||'', prevCaLeave: m.caLeave||''
+  };
+  // 既存会員の情報をモーダルに事前反映（モーダルの最終状態＝最新の全量。機能仕様書「統合時の保存」）
+  var set = function(id, v){ var el = document.getElementById(id); if(el && v) el.value = v; };
+  set('enrollName', m.name); set('enrollReading', m.reading); set('enrollGrade', m.grade);
+  set('enrollGender', m.gender); set('enrollParent', m.parent); set('enrollContact', m.contact || m.phone);
+  set('enrollSchool', m.school); set('enrollTargetSchool', m.targetSchool);
+  if(m.classroom){ var clSel = document.getElementById('enrollClassroom'); if(clSel) clSel.value = m.classroom; }
+  var cbJ = document.getElementById('enrollAttrJuku');
+  var cbC = document.getElementById('enrollAttrCa');
+  if(cbJ){ cbJ.checked = cbJ.checked || !!m.attrJuku; cbJ.disabled = wasJuku; if(wasJuku) cbJ.title = '在籍中のため外せません（退会は詳細パネルから）'; }
+  if(cbC){ cbC.checked = cbC.checked || !!m.attrCa; cbC.disabled = wasCa; if(wasCa) cbC.title = '在籍中のため外せません（退会は詳細パネルから）'; }
+  // 入会日：在籍中コースは既存の入会日を維持、新規/再入会コースは今日
+  var todayStr = dateToStr(new Date());
+  var dj = document.getElementById('enrollJukuEnroll');
+  if(dj) dj.value = wasJuku ? (m.jukuEnroll||todayStr) : todayStr;
+  var dc = document.getElementById('enrollCaEnroll');
+  if(dc) dc.value = wasCa ? (m.caEnroll||todayStr) : todayStr;
+  updateEnrollDates();
+  renderEnrollKoma(m.komas||[]);
+  renderEnrollMergeBar();
+}
+
+function enrollMergeReset(){
+  _enrollMergeTarget = null;
+  ['enrollAttrJuku','enrollAttrCa'].forEach(function(id){
+    var el = document.getElementById(id);
+    if(el){ el.disabled = false; el.removeAttribute('title'); }
+  });
+}
+
+function enrollMergeClear(){
+  enrollMergeReset();
+  var iq = _inquiries.find(function(x){ return x.id===_enrollInquiryId; });
+  if(iq) openEnrollPopup(iq); // 問い合わせ情報の初期状態に戻す
+}
+
+// 手動検索モーダル（Kurofune-LINE linkPicker と同型・2026-07-06）
+function openEnrollMergeSearch(){
+  closeEnrollMergeSearch();
+  var ov = document.createElement('div');
+  ov.id = 'enrollMergeSearchOverlay';
+  ov.className = 'overlay show';
+  ov.addEventListener('click', function(e){ if(e.target === ov) closeEnrollMergeSearch(); });
+  ov.innerHTML = '<div class="modal" style="width:min(90vw,480px);max-height:80vh;overflow-y:auto;">'
+    + '<div class="modal-head"><span class="modal-head-title">🔍 統合する会員を検索</span><button class="modal-close" onclick="closeEnrollMergeSearch()">×</button></div>'
+    + '<div class="modal-body">'
+    + '<input class="form-input" id="enrollMergeSearchInput" placeholder="生徒名・よみがなで検索" oninput="renderEnrollMergeSearchList()">'
+    + '<div id="enrollMergeSearchList" style="max-height:320px;overflow-y:auto;margin-top:8px;"></div>'
+    + '</div></div>';
+  document.body.appendChild(ov);
+  var inp = document.getElementById('enrollMergeSearchInput');
+  if(inp){ inp.value = (document.getElementById('enrollName')||{}).value || ''; inp.focus(); }
+  renderEnrollMergeSearchList();
+}
+function closeEnrollMergeSearch(){
+  var ov = document.getElementById('enrollMergeSearchOverlay');
+  if(ov && ov.parentNode) ov.parentNode.removeChild(ov);
+}
+function renderEnrollMergeSearchList(){
+  var list = document.getElementById('enrollMergeSearchList');
+  if(!list) return;
+  var q = ((document.getElementById('enrollMergeSearchInput')||{}).value || '').trim();
+  var grade = (document.getElementById('enrollGrade')||{}).value || '';
+  var scored;
+  if(q){
+    scored = (_members||[]).map(function(m){ return { m:m, score: enrollMergeScore_(q, q, grade, m) }; })
+      .filter(function(x){ return x.score > 0; })
+      .sort(function(a,b){ return b.score - a.score; });
+  } else {
+    scored = (_members||[]).map(function(m){ return { m:m, score: 0 }; });
+  }
+  scored = scored.slice(0, 50);
+  if(!scored.length){ list.innerHTML = '<div style="padding:14px;color:#9ca3af;font-size:12px;">該当する会員がいません</div>'; return; }
+  list.innerHTML = scored.map(function(x){
+    var m = x.m;
+    var strong = x.score >= 100 ? '<span style="font-size:10px;background:#dc2626;color:#fff;border-radius:4px;padding:1px 5px;font-weight:700;">有力候補</span>' : '';
+    return '<div style="display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:1px solid var(--border);cursor:pointer;" '
+      + 'onclick="enrollMergeSelect(\''+esc(m.id)+'\');closeEnrollMergeSearch();">'
+      + '<span style="font-weight:700;font-size:13px;">'+esc(m.name||'')+'</span>'
+      + enrollMergeBadges_(m) + strong
+      + '</div>';
+  }).join('');
+}
+
+// 統合の保存：既存レコードをベースにモーダル表示項目のみ上書き（新オブジェクトでの置換は禁止＝モーダルに無い項目
+// forestaId・生年月日・policyMemo・休会情報・成績・面談・メモ等の消失防止。機能仕様書「統合時の保存」参照）
+function confirmEnrollMergeProceed(iq){
+  var t = _enrollMergeTarget;
+  var m = (_members||[]).find(function(x){ return x.id===t.id; });
+  if(!m){ enrollMergeReset(); showToast('統合先の会員が見つかりません', true); return; }
+  var val = function(id){ var el = document.getElementById(id); return el ? (el.value||'').trim() : ''; };
+  var todayStr = dateToStr(new Date());
+  var attrJuku = document.getElementById('enrollAttrJuku').checked;
+  var attrCa   = document.getElementById('enrollAttrCa').checked;
+  var addedJuku = attrJuku && !t.wasActiveJuku; // 統合前に在籍していなかったコース＝タスク発火・退会日クリア対象（川上さん決定 2026-07-06）
+  var addedCa   = attrCa   && !t.wasActiveCa;
+  // モーダル表示項目のみ上書き
+  m.name = val('enrollName') || m.name;
+  m.reading = val('enrollReading');
+  m.grade = document.getElementById('enrollGrade').value || m.grade;
+  m.gender = document.getElementById('enrollGender').value || m.gender || '';
+  m.parent = val('enrollParent');
+  m.contact = val('enrollContact');
+  m.school = val('enrollSchool');
+  m.targetSchool = val('enrollTargetSchool');
+  m.classroom = document.getElementById('enrollClassroom').value || m.classroom;
+  m.enrollRoute = document.getElementById('enrollRoute') ? document.getElementById('enrollRoute').value : (m.enrollRoute||'');
+  m.attrJuku = attrJuku;
+  m.attrCa = attrCa;
+  m.komas = getKomasFromWrap('enrollKomaWrap');
+  m.status = '在籍'; // 統合＝復活（川上さん決定 2026-07-06）
+  if(attrJuku){
+    m.jukuEnroll = document.getElementById('enrollJukuEnroll').value || m.jukuEnroll || todayStr;
+    if(addedJuku){ m.jukuLeave = ''; m.jukuLeaveConfirmed = false; } // 再入会：退会日は上書きクリア・前回在籍は自動メモで残す（川上さん決定 2026-07-06）
+  }
+  if(attrCa){
+    m.caEnroll = document.getElementById('enrollCaEnroll').value || m.caEnroll || todayStr;
+    if(addedCa){ m.caLeave = ''; m.caLeaveConfirmed = false; }
+  }
+  // 自動経緯メモ
+  var parts = [];
+  if(addedJuku) parts.push('塾入会' + (t.prevJukuEnroll ? '（前回在籍：'+t.prevJukuEnroll+'〜'+(t.prevJukuLeave||'退会日不明')+'）' : ''));
+  if(addedCa)   parts.push('CA入会' + (t.prevCaEnroll ? '（前回在籍：'+t.prevCaEnroll+'〜'+(t.prevCaLeave||'退会日不明')+'）' : ''));
+  m.memos = m.memos || [];
+  m.memos.push({ id: genId(), date: todayStr, content: '【自動】問い合わせからの会員登録（既存レコードに統合）' + (parts.length ? '：' + parts.join(' / ') : ''), isTask: false, due: '', taskDone: false });
+  // 来訪アポの入会面談メモを面談履歴（入会時ラベル）に引き継ぎ（新規登録と同じ挙動）
+  if(iq.interviewMemo && iq.interviewMemo.trim()){
+    var visitDate = (iq.steps && iq.steps.visit && iq.steps.visit.date) || todayStr;
+    m.interviews = m.interviews || [];
+    m.interviews.push({ id: genId(), date: visitDate, label: 'join', content: iq.interviewMemo.trim(), isTask: false, due: '', taskDone: false });
+  }
+  renderList(); updateClassroomFilter();
+  saveToCache(); saveOneStudentToGas(m);
+  iq.enrolledToMember = true;
+  saveInquiriesToCache();
+  // タスク発火は統合前に持っていなかったコースのみ（川上さん決定 2026-07-06）
+  var _enrollCls = m.classroom || '';
+  var _enrollName2 = m.name || '';
+  var _enrollDate = m.jukuEnroll || m.caEnroll || '';
+  var _enrollGrade = m.grade || iq.grade || '';
+  var _enrollReading = m.reading || iq.reading || '';
+  if(addedJuku) fireIqTaskTrigger('enrolled_juku', _enrollDate, '', _enrollCls, _enrollName2, '', undefined, _enrollGrade, _enrollReading);
+  if(addedCa)   fireIqTaskTrigger('enrolled_ca',   _enrollDate, '', _enrollCls, _enrollName2, '', undefined, _enrollGrade, _enrollReading);
+  document.getElementById('enrollPopupOverlay').classList.remove('show');
+  _enrollInquiryId = null;
+  var hint = (t.wasActiveJuku || t.wasActiveCa) ? '（退会手続きがある場合は詳細パネルから）' : '';
+  showToast(m.name + ' に統合しました 🎉' + hint);
+  enrollMergeReset();
+  showEnrollFileGuide(m);
+}
+
 function closeEnrollPopup(){
+  enrollMergeReset(); // 統合モードを解除（2026-07-06）
   // ×でキャンセル: 入会確約チェックを外してキャンセル扱いにする
   var iq = _enrollInquiryId ? _inquiries.find(function(x){ return x.id===_enrollInquiryId; }) : null;
   if(iq && iq.steps && iq.steps.enroll){
@@ -8966,7 +9217,9 @@ function confirmEnroll(){
   var _vName = (document.getElementById('enrollName').value||'').trim();
   var _vGrade = document.getElementById('enrollGrade').value||'';
   var _vClass = document.getElementById('enrollClassroom').value||'';
-  var _vDate  = document.getElementById('enrollDate').value||'';
+  // enrollDate要素はコース別入会日（enrollJukuEnroll/enrollCaEnroll）への改修で廃止済み。null参照でconfirmEnrollが例外死しボタン無反応になっていたためガード（川上さん報告 2026-07-06）
+  var _vDateEl = document.getElementById('enrollDate');
+  var _vDate  = _vDateEl ? (_vDateEl.value||'') : '';
   if(!_vName){
     document.getElementById('enrollName').style.borderColor='var(--crimson)';
     document.getElementById('enrollName').focus();
@@ -8982,9 +9235,9 @@ function confirmEnroll(){
     document.getElementById('enrollClassroom').focus();
     showToast('⚠️ 教室を選択してください', true); return;
   }
-  if(!_vDate){
-    // 入会日が空なら今日の日付を自動セット
-    document.getElementById('enrollDate').value = dateToStr(new Date());
+  if(!_vDate && _vDateEl){
+    // 入会日が空なら今日の日付を自動セット（要素がある場合のみ。現行モーダルはコース別入会日を使用）
+    _vDateEl.value = dateToStr(new Date());
   }
   // 必須エラー表示リセット
   ['enrollName','enrollGrade','enrollClassroom','enrollDate'].forEach(function(id){
@@ -9022,6 +9275,8 @@ function confirmEnroll(){
 function confirmEnrollProceed(){
   var iq = _inquiries.find(function(x){ return x.id===_enrollInquiryId; });
   if(!iq){ closeEnrollPopup(); return; }
+  // 統合モード：既存レコードへ加筆（川上さん承認 2026-07-06・新規レコードは作らない）
+  if(_enrollMergeTarget){ confirmEnrollMergeProceed(iq); return; }
   // 会員管理に追加
   var m = {
     id: genId(),
@@ -9074,9 +9329,13 @@ function confirmEnrollProceed(){
   _enrollInquiryId = null;
   showToast(iq.name+'を会員登録しました 🎉');
 
-  // 入会書類アップロードの案内
+  showEnrollFileGuide(m);
+}
+
+// 入会書類アップロードの案内（新規登録・統合の両方から呼ぶ・2026-07-06に関数化）
+function showEnrollFileGuide(member){
   setTimeout(function(){
-    var newMember = _members[_members.length - 1];
+    var newMember = member;
     var msg = document.createElement('div');
     msg.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#1e3a5f;color:#fff;border-radius:12px;padding:14px 20px;font-size:13px;line-height:1.7;z-index:9999;max-width:320px;box-shadow:0 4px 16px rgba(0,0,0,0.25);';
     msg.innerHTML = '📎 <strong>入会書類（カウンセリングシート・コース申込書）をアップしてください</strong><br>'
