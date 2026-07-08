@@ -2774,6 +2774,8 @@ function saveDetail(){
   m.caLeave     =document.getElementById('dCaLeave').value;
   m.jukuRest    =document.getElementById('dJukuRest').value;
   m.caRest      =document.getElementById('dCaRest').value;
+  // 川上さん決定(2026-07-08)：全体ステータスはコースから合成して決める（塾かCAどちらか在籍なら在籍）
+  (function(){ var _t=new Date(); _t.setHours(0,0,0,0); var _ds=deriveMemberStatus(m,_t); if(_ds) m.status=_ds; })();
   // 通常コマ（塾・CA）＋土曜コマを統合（getKomasFromUIに統合済み）
   m.komas = getKomasFromUI();
   m.satOptions = []; // 廃止済み（後方互換のため空配列を残す）
@@ -10225,54 +10227,44 @@ function switchCfgTab(tab){
   }
 }
 
+// 川上さん決定(2026-07-08)：会員の在籍/退会/休会は「コースごとの状態を合成」して決める。
+//   別料金の独立コース（塾・CA）。持っていない（未入会=空欄）コースはノーカウント。
+//   コース状態＝退会日が過去→退会 / 休会日が過去→休会 / それ以外→在籍。
+//   全体＝どれか在籍なら在籍 ＞ どれか休会なら休会 ＞ 全部退会なら退会。退会日は記録として残す。
+//   単一の正は機能仕様書「在籍ステータスの合成判定」。
+function _courseState(hasAttr, leaveStr, restStr, today){
+  if(!hasAttr) return 'none';
+  var lv = leaveStr ? new Date(leaveStr + 'T00:00:00') : null;
+  var rt = restStr  ? new Date(restStr  + 'T00:00:00') : null;
+  var lPast = lv && !isNaN(lv) && lv < today;
+  var rPast = rt && !isNaN(rt) && rt < today;
+  if(lPast) return '退会';
+  if(rPast) return '休会';
+  return '在籍';
+}
+function deriveMemberStatus(m, today){
+  var j = _courseState(!!m.attrJuku, m.jukuLeave, m.jukuRest, today);
+  var c = _courseState(!!m.attrCa,   m.caLeave,   m.caRest,   today);
+  if(j==='none' && c==='none') return null; // コースを持っていない＝自動判定しない
+  if(j==='在籍' || c==='在籍') return '在籍';
+  if(j==='休会' || c==='休会') return '休会';
+  return '退会';
+}
 function checkAutoLeave(){
   var today = new Date(); today.setHours(0,0,0,0);
   var changed = false;
   var changedMembers = []; // 事故防止(2026-06-27)：全件上書きでなく変更生徒だけ差分保存する
   (_members||[]).forEach(function(m){
-    if(m.status==='在籍'||m.status==='休会'){
-      // jukuLeave / caLeave のうち入力済みの日付が今日以前なら退会に変更
-      var jld = m.jukuLeave ? new Date(m.jukuLeave + 'T00:00:00') : null;
-      var cld = m.caLeave   ? new Date(m.caLeave   + 'T00:00:00') : null;
-      var jPast = jld && !isNaN(jld) && jld < today;
-      var cPast = cld && !isNaN(cld) && cld < today;
-      // 両コース入会 → 両方過ぎたら退会。片方のみ入会 → その日付で判定
-      var hasJuku = !!m.attrJuku;
-      var hasCa   = !!m.attrCa;
-      var shouldLeave = false;
-      if(hasJuku && hasCa)       shouldLeave = jPast && cPast;
-      else if(hasJuku)           shouldLeave = jPast;
-      else if(hasCa)             shouldLeave = cPast;
-      else if(m.jukuLeave||m.caLeave) shouldLeave = (jPast||false) || (cPast||false);
-      if(shouldLeave){
-        m.status = '退会';
-        changed = true;
-        changedMembers.push(m);
-        return; // 退会が休会より優先
-      }
-      // ===== 自動休会（退会と同ロジック・在籍のみ対象） =====
-      if(m.status === '在籍'){
-        var jrd = m.jukuRest ? new Date(m.jukuRest + 'T00:00:00') : null;
-        var crd = m.caRest   ? new Date(m.caRest   + 'T00:00:00') : null;
-        var jrPast = jrd && !isNaN(jrd) && jrd < today;
-        var crPast = crd && !isNaN(crd) && crd < today;
-        var shouldRest = false;
-        if(hasJuku && hasCa)       shouldRest = jrPast && crPast;
-        else if(hasJuku)           shouldRest = jrPast;
-        else if(hasCa)             shouldRest = crPast;
-        else if(m.jukuRest||m.caRest) shouldRest = (jrPast||false) || (crPast||false);
-        if(shouldRest){
-          m.status = '休会';
-          changed = true;
-          changedMembers.push(m);
-        }
-      }
+    var ns = deriveMemberStatus(m, today);
+    if(ns && m.status !== ns){
+      m.status = ns;
+      changed = true;
+      changedMembers.push(m);
     }
   });
   if(changed){
     saveToCache(); renderList();
     // 事故防止(2026-06-27)：全件上書き(saveToGas)をやめ、状態が変わった生徒だけ差分保存する。
-    // 古いキャッシュで全件上書きされ面談記録が消える事故(2026-06-26)の再発防止。
     changedMembers.forEach(function(cm){ if(typeof saveOneStudentToGas==='function') saveOneStudentToGas(cm, {skipVerify:true}); });
   }
 }
