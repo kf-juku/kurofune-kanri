@@ -778,9 +778,9 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.52"/></svg>
             読み込み
           </button>
-          <button class="btn-tool" onclick="saveAllToGas()" id="btnSaveAll" title="GASにデータを保存する">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-            保存
+          <button class="btn-tool" onclick="openMemberServerCheck()" id="btnMemberCheck" title="この端末とサーバー（スプレッドシート）のズレを確認">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
+            サーバー確認
           </button>
           <div class="btn-header-divider"></div>
           <button class="btn-tool" onclick="downloadScoreExcel()" title="成績データをExcelでダウンロード">
@@ -3097,7 +3097,8 @@ function saveScoreInput(){
     }
     saved++;
   });
-  saveToCache(); saveToGas();
+  var _changedM=Object.keys(processed).map(function(id){ return _members.find(function(x){ return x.id===id; }); }).filter(Boolean);
+  saveToCache(); updateManyStudentsToGas(_changedM);
   showToast(saved+'名分の成績を保存しました');
 }
 
@@ -4364,6 +4365,7 @@ function bulkDeleteTasks(){
   var keys = Object.keys(_bulkSelectedTasks);
   if(!keys.length) return;
   if(!confirm(keys.length + ' 件のタスクを削除します。よろしいですか？')) return;
+  var _affected={};
   keys.forEach(function(key){
     var parts = key.split(':');
     var type = parts[0];
@@ -4373,15 +4375,16 @@ function bulkDeleteTasks(){
     } else if(type === 'interview'){
       var p = id.split('/'); var mid = p[0], rid = p[1];
       var m = (_members||[]).find(function(x){ return x.id === mid; });
-      if(m && m.interviews){ m.interviews = m.interviews.filter(function(r){ return r.id !== rid; }); }
+      if(m && m.interviews){ m.interviews = m.interviews.filter(function(r){ return r.id !== rid; }); _affected[mid]=true; }
     } else if(type === 'memo'){
       var p2 = id.split('/'); var mid2 = p2[0], rid2 = p2[1];
       var m2 = (_members||[]).find(function(x){ return x.id === mid2; });
-      if(m2 && m2.memos){ m2.memos = m2.memos.filter(function(r){ return r.id !== rid2; }); }
+      if(m2 && m2.memos){ m2.memos = m2.memos.filter(function(r){ return r.id !== rid2; }); _affected[mid2]=true; }
     }
   });
   saveIqTasks();
-  saveToCache(); saveToGas();
+  var _changedM=Object.keys(_affected).map(function(id){ return _members.find(function(x){ return x.id===id; }); }).filter(Boolean);
+  saveToCache(); if(_changedM.length) updateManyStudentsToGas(_changedM);
   _bulkSelectedTasks = {};
   updateSmBulkBar();
   renderTasks();
@@ -4691,12 +4694,13 @@ function closeDeleteModal(){ document.getElementById('deleteOverlay').classList.
 function confirmDelete(){
   if(_deleteIdx===null) return;
   var name=_members[_deleteIdx].name||'会員';
+  var delId=_members[_deleteIdx].id;
   _members.splice(_deleteIdx,1);
   closeDeleteModal();
   if(_detailIdx===_deleteIdx){ closeDetail(); _detailIdx=null; }
   else if(_detailIdx!==null&&_detailIdx>_deleteIdx){ _detailIdx--; }
   renderList(); updateClassroomFilter();
-  saveToCache(); saveToGas();
+  saveToCache(); deleteOneStudentFromGas(delId, name);
   showToast(name+'を削除しました');
 }
 
@@ -4979,7 +4983,7 @@ function filesLoadThumbnails(m) {
     });
 }
 
-function saveOneStudentToGas(m){
+function saveOneStudentToGas(m, opts){
   var url=getGasUrl();
   if(!url || !m) return Promise.resolve();
   var fd=new FormData();
@@ -4995,6 +4999,8 @@ function saveOneStudentToGas(m){
       window._memberSaving = false;
       if(!data || !data.success){
         showToast('GAS保存に失敗しました（' + (data&&data.error||'不明') + '）', true);
+      } else if(!(opts&&opts.skipVerify)){
+        verifyMemberSaved(m); // 案1(2026-07-08)：保存直後にサーバー照合。届いていなければ警告
       }
     })
     .catch(function(e){
@@ -5004,26 +5010,236 @@ function saveOneStudentToGas(m){
     });
 }
 
-function saveToGas(){
+// 2026-07-08 全件上書き撤廃（川上さん決定・案A）：全件保存(updateStudents)は廃止。差分保存(saveOneStudentToGas/updateManyStudentsToGas/deleteOneStudentFromGas)のみ使用。誤って全行を巻き戻す事故の根絶。
+function saveToGas(){ console.warn('[GAS] saveToGas は廃止されました（差分保存に移行）'); return Promise.resolve(); }
+
+// 差分保存（2026-07-08 全件上書き撤廃）：複数生徒をid一致行だけ更新。他行は触らない＝古い端末による全件巻き戻しを根絶
+function updateManyStudentsToGas(list){
   var url=getGasUrl();
-  if(!url) return;
+  if(!url || !list || !list.length) return Promise.resolve();
   var fd=new FormData();
-  fd.append('action','updateStudents');
-  fd.append('students',JSON.stringify(_members));
-  // 保存中フラグON → 完了後にリセット（GAS古いデータ取得による上書き防止）
-  window._memberSaving = true;
-  // 安全弁(川上さん指示 2026-06-26)：保存成否を検証する。data.successが真でなければエラー表示。
-  // 全件上書きが残る箇所（一括処理・生徒削除・自動退会など構造変更系）の保険。
+  fd.append('action','updateManyStudents');
+  fd.append('students',JSON.stringify(list));
+  window._memberSaving=true;
   return fetch(url,{method:'POST',body:fd})
     .then(function(r){ return r.json(); })
     .then(function(data){
-      window._lastGasSync = Date.now(); window._memberSaving = false;
-      if(!data || !data.success){
-        showToast('GAS保存に失敗しました（' + (data&&data.error||'不明') + '）', true);
-      }
-      return data;
+      window._lastGasSync=Date.now(); window._memberSaving=false;
+      if(!data||!data.success){ showToast('GAS保存に失敗しました（'+(data&&data.error||'不明')+'）', true); }
+      else { verifyManySaved(list); } // 案1(2026-07-08)：保存直後にサーバー照合
     })
-    .catch(function(e){ window._memberSaving = false; console.warn('[GAS] 会員保存失敗:', e); showToast('GAS保存に失敗しました', true); });
+    .catch(function(e){ window._memberSaving=false; console.warn('[GAS] 複数保存失敗:', e); showToast('GAS保存に失敗しました', true); });
+}
+// 差分削除（2026-07-08）：該当生徒の行だけ削除。全件上書き撤廃の代替
+function deleteOneStudentFromGas(id, name){
+  var url=getGasUrl();
+  if(!url || !id) return Promise.resolve();
+  var fd=new FormData();
+  fd.append('action','deleteOneStudent');
+  fd.append('id',id);
+  window._memberSaving=true;
+  return fetch(url,{method:'POST',body:fd})
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      window._lastGasSync=Date.now(); window._memberSaving=false;
+      if(!data||!data.success){ showToast('GAS削除に失敗しました（'+(data&&data.error||'不明')+'）', true); }
+      else { verifyMemberDeleted(id, name); } // 案1(2026-07-08)：削除直後にサーバー照合
+    })
+    .catch(function(e){ window._memberSaving=false; console.warn('[GAS] 削除失敗:', e); showToast('GAS削除に失敗しました', true); });
+}
+
+// 検知策B(2026-07-08)：保存した生徒をサーバーから取り直し、在籍状態・コース・退会日が一致するか照合。ズレたら明確に警告。
+function verifyMemberSaved(m){
+  var url=getGasUrl();
+  if(!url || !m || !m.id) return;
+  fetch(url+'?action=getOneStudent&id='+encodeURIComponent(m.id)+'&_t='+Date.now())
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      var sv = data && data.found && data.student;
+      var diff=[];
+      if(!sv){ diff.push('サーバーにこの生徒が見つかりません'); }
+      else {
+        var chk=function(label,a,b){ if(String(a||'')!==String(b||'')) diff.push(label+'（この画面:'+(a||'空')+' ／ サーバー:'+(b||'空')+'）'); };
+        chk('在籍状態', m.status, sv.status);
+        chk('塾在籍', m.attrJuku?'有':'無', sv.attrJuku?'有':'無');
+        chk('CA在籍', m.attrCa?'有':'無', sv.attrCa?'有':'無');
+        chk('塾退会日', m.jukuLeave, sv.jukuLeave);
+        chk('CA退会日', m.caLeave, sv.caLeave);
+      }
+      if(diff.length){ showMemberSaveWarning(m, diff); }
+    })
+    .catch(function(e){ showMemberSaveWarning(m, ['サーバー確認の通信に失敗しました']); });
+}
+// 検知策B(2026-07-08)：サーバー未反映を赤い専用モーダルで明確に知らせ、再保存導線を出す（トーストで流さない）
+function showMemberSaveWarning(m, reasons){
+  var ov=document.createElement('div');
+  ov.className='overlay show';
+  ov.style.zIndex='10001';
+  var box=document.createElement('div');
+  box.className='modal';
+  box.style.cssText='width:min(92vw,460px);border:2px solid #dc2626;';
+  box.innerHTML='<div class="modal-head" style="background:#fef2f2;"><span class="modal-head-title" style="color:#b91c1c;">\u26a0\ufe0f サーバーに反映されていません</span></div>'
+    +'<div class="modal-body">'
+    +'<div style="font-size:13px;color:#7f1d1d;margin-bottom:8px;">'+esc(m.name||'この生徒')+' の内容が、スプレッドシート（サーバー）と食い違っています。いまこの画面で在籍に見えても、他の端末では古い状態が見えている可能性があります。</div>'
+    +'<div style="background:#fff7ed;border:1px solid #fdba74;border-radius:6px;padding:8px 10px;font-size:12px;color:#9a3412;margin-bottom:12px;">'+reasons.map(function(x){ return '\u30fb'+esc(x); }).join('<br>')+'</div>'
+    +'<div style="display:flex;gap:8px;justify-content:flex-end;">'
+    +'<button id="_mswClose" style="border:1px solid #cbd5e1;background:#fff;border-radius:8px;padding:8px 14px;cursor:pointer;font-size:13px;color:#334155;">閉じる</button>'
+    +'<button id="_mswResave" style="border:none;background:#dc2626;color:#fff;border-radius:8px;padding:8px 14px;cursor:pointer;font-size:13px;font-weight:700;">サーバーに再保存</button>'
+    +'</div></div>';
+  ov.appendChild(box);
+  document.body.appendChild(ov);
+  box.querySelector('#_mswClose').addEventListener('click', function(){ ov.remove(); });
+  box.querySelector('#_mswResave').addEventListener('click', function(){
+    var b=box.querySelector('#_mswResave'); b.disabled=true; b.textContent='再保存中...';
+    saveOneStudentToGas(m).then(function(){ ov.remove(); });
+  });
+}
+
+// 案1(2026-07-08)：一括保存の直後にサーバー全件を1回取り直し、渡した会員がサーバーと一致するか照合
+function verifyManySaved(list){
+  var url=getGasUrl(); if(!url || !list || !list.length) return;
+  fetch(url+'?action=getStudents&_t='+Date.now()).then(function(r){ return r.json(); }).then(function(data){
+    if(!data||!data.students) return;
+    var map={}; data.students.map(normalizeStudent).forEach(function(sv){ if(sv.id) map[sv.id]=sv; });
+    var bad=[];
+    list.forEach(function(m){ if(!m||!m.id) return; var sv=map[m.id]; if(!sv || memberDiffFields(m,sv).length) bad.push(m.name||'会員'); });
+    if(bad.length) showToast('⚠️ '+bad.length+'名がサーバーに未反映の可能性。会員一覧の「サーバー確認」で確認してください', true);
+  }).catch(function(){});
+}
+// 案1(2026-07-08)：削除の直後に、その会員がサーバーから本当に消えたか照合
+function verifyMemberDeleted(id, name){
+  var url=getGasUrl(); if(!url || !id) return;
+  fetch(url+'?action=getOneStudent&id='+encodeURIComponent(id)+'&_t='+Date.now()).then(function(r){ return r.json(); }).then(function(data){
+    if(data && data.found) showToast('⚠️ '+(name||'会員')+' の削除がサーバーに反映されていない可能性があります', true);
+  }).catch(function(){});
+}
+
+// =====================================================
+// 検知策C(2026-07-08)：会員ステータス サーバー確認一覧。getStudentsでサーバー全件を取り直し、
+// この端末の_membersと「保存対象フィールド全部」を突き合わせ、ズレのある会員だけを一覧表示。
+// 各会員を詳細を開かず1クリックでどちらかに揃えて解消できる。
+// =====================================================
+var _memberCheckServer = {};
+function _mcNorm(v){
+  if(v===undefined||v===null) return '';
+  if(typeof v==='string') return v.trim();
+  if(typeof v==='boolean') return v?'1':'';
+  if(Array.isArray(v)){ return v.length?JSON.stringify(v):''; }
+  if(typeof v==='object'){ return Object.keys(v).length?JSON.stringify(v):''; }
+  return String(v);
+}
+function _mcKomas(arr){
+  if(!Array.isArray(arr)||!arr.length) return '';
+  return JSON.stringify(arr.map(function(k){ return {id:(k.id||''),youbi:(k.youbi||''),time:(k.time||''),classroom:(k.classroom||''),online:!!k.online,satType:(k.satType||'')}; })
+    .sort(function(a,b){ return (a.id+a.youbi+a.time).localeCompare(b.id+b.youbi+b.time); }));
+}
+function _mcScores(x){ return (x&&typeof x==='object'&&Object.keys(x).length)?JSON.stringify(x):''; }
+function _mcDisp(v){ if(v===undefined||v===null||v==='') return '（空）'; if(v===true) return '有'; if(v===false) return '無'; return String(v); }
+function memberDiffFields(L, S){
+  L=L||{}; S=S||{}; var out=[];
+  var scal=[['氏名','name'],['よみがな','reading'],['学年','grade'],['性別','gender'],['学校','school'],['志望校','targetSchool'],['教室','classroom'],['在籍状態','status'],
+    ['塾在籍',function(m){return m.attrJuku?'有':'無';}],['CA在籍',function(m){return m.attrCa?'有':'無';}],
+    ['塾入会日','jukuEnroll'],['CA入会日','caEnroll'],['塾退会日','jukuLeave'],['CA退会日','caLeave'],['塾休会日','jukuRest'],['CA休会日','caRest']];
+  scal.forEach(function(pr){
+    var key=pr[1];
+    var lv = typeof key==='function'?key(L):L[key];
+    var sv = typeof key==='function'?key(S):S[key];
+    if(_mcNorm(lv)!==_mcNorm(sv)) out.push({label:pr[0], local:_mcDisp(lv), server:_mcDisp(sv)});
+  });
+  if(_mcKomas(L.komas)!==_mcKomas(S.komas)) out.push({label:'通塾コース', kind:'diff'});
+  if(_mcScores(L.scores)!==_mcScores(S.scores)) out.push({label:'成績', kind:'diff'});
+  var li=(L.interviews||[]).length, si=(S.interviews||[]).length;
+  if(li!==si) out.push({label:'面談記録の件数', local:li+'件', server:si+'件'});
+  var lm=(L.memos||[]).length, sm=(S.memos||[]).length;
+  if(lm!==sm) out.push({label:'メモの件数', local:lm+'件', server:sm+'件'});
+  return out;
+}
+function openMemberServerCheck(){
+  var ov=document.getElementById('memberCheckOverlay');
+  if(!ov){
+    ov=document.createElement('div'); ov.id='memberCheckOverlay';
+    ov.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,0.45);z-index:9999;display:flex;justify-content:center;align-items:flex-start;padding:24px 12px;overflow:auto;';
+    ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:600px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);overflow:hidden;">'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #e2e8f0;position:sticky;top:0;background:#fff;">'
+      +'<div style="font-weight:800;font-size:15px;color:#0f172a;">☁︎ 会員ステータス サーバー確認</div>'
+      +'<button onclick="closeMemberServerCheck()" style="border:none;background:#f1f5f9;border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:16px;color:#475569;">×</button>'
+      +'</div><div id="memberCheckBody" style="padding:14px 18px;max-height:calc(100vh - 150px);overflow-y:auto;"></div></div>';
+    document.body.appendChild(ov);
+    ov.addEventListener('click', function(e){ if(e.target===ov) closeMemberServerCheck(); });
+  }
+  ov.style.display='flex';
+  loadMemberServerCheck();
+}
+function closeMemberServerCheck(){ var ov=document.getElementById('memberCheckOverlay'); if(ov) ov.style.display='none'; }
+function loadMemberServerCheck(){
+  var body=document.getElementById('memberCheckBody'); if(!body) return;
+  var url=getGasUrl();
+  if(!url){ body.innerHTML='<div style="font-size:13px;color:#92400e;padding:16px;">GAS未接続のため確認できません</div>'; return; }
+  body.innerHTML='<div style="font-size:13px;color:#64748b;padding:24px;text-align:center;">☁︎ サーバーから全会員を読み込んでいます…</div>';
+  fetch(url+'?action=getStudents&_t='+Date.now())
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if(!data||!data.students){ body.innerHTML='<div style="font-size:13px;color:#dc2626;padding:16px;">取得に失敗しました</div>'; return; }
+      var server=(data.students||[]).map(normalizeStudent);
+      _memberCheckServer={}; server.forEach(function(sv){ if(sv.id) _memberCheckServer[sv.id]=sv; });
+      renderMemberServerCheck(server);
+    })
+    .catch(function(e){ body.innerHTML='<div style="font-size:13px;color:#dc2626;padding:16px;">取得に失敗しました（'+esc(e.message)+'）</div>'; });
+}
+function renderMemberServerCheck(server){
+  var body=document.getElementById('memberCheckBody'); if(!body) return;
+  var localMap={}; (_members||[]).forEach(function(m){ if(m.id) localMap[m.id]=m; });
+  var rows=[];
+  (_members||[]).forEach(function(m){
+    if(!m.id) return;
+    var sv=_memberCheckServer[m.id];
+    if(!sv){ rows.push({type:'localOnly', id:m.id, name:m.name||'（名前なし）'}); return; }
+    var d=memberDiffFields(m, sv);
+    if(d.length) rows.push({type:'diff', id:m.id, name:m.name||'（名前なし）', diffs:d});
+  });
+  server.forEach(function(sv){ if(sv.id && !localMap[sv.id]) rows.push({type:'serverOnly', id:sv.id, name:sv.name||'（名前なし）'}); });
+  var html='<div style="font-size:12px;color:#64748b;margin-bottom:10px;">スプレッドシート上の会員：'+(server||[]).length+'人</div>';
+  if(!rows.length){ body.innerHTML=html+'<div style="background:#ecfdf5;border:1px solid #6ee7b7;border-radius:8px;padding:14px;font-size:13px;color:#065f46;text-align:center;">✅ この端末とサーバーは一致しています。ズレはありません。</div>'; return; }
+  html+='<div style="background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:11px 13px;margin-bottom:14px;">'
+    +'<div style="font-size:13px;color:#9a3412;font-weight:800;margin-bottom:3px;">⚠️ サーバーと食い違い：'+rows.length+'件</div>'
+    +'<div style="font-size:12px;color:#9a3412;">どちらの内容に合わせるかを、その列の真下のボタンで選びます。</div></div>';
+  rows.forEach(function(r){ html+=memberCheckCard(r); });
+  body.innerHTML=html;
+}
+function memberCheckCard(r){
+  var head='<div style="font-size:14px;font-weight:700;color:#0f172a;margin-bottom:10px;">'+esc(r.name)+'</div>';
+  var btnLocal='<button onclick="mcResolve(\''+esc(r.id)+'\',\'local\')" style="border:1px solid #cbd5e1;background:#fff;border-radius:8px;padding:7px 6px;cursor:pointer;font-size:12px;line-height:1.35;color:#0f172a;">この端末を正にする<span style="display:block;font-size:11px;color:#94a3b8;">サーバーへ保存</span></button>';
+  var btnServer='<button onclick="mcResolve(\''+esc(r.id)+'\',\'server\')" style="border:1px solid #cbd5e1;background:#fff;border-radius:8px;padding:7px 6px;cursor:pointer;font-size:12px;line-height:1.35;color:#0f172a;">サーバーを正にする<span style="display:block;font-size:11px;color:#94a3b8;">この端末を更新</span></button>';
+  var inner='';
+  if(r.type==='localOnly'){
+    inner='<div style="font-size:12px;color:#9a3412;margin-bottom:10px;">この端末にだけあり、サーバーにありません（未保存の疑い）。</div><div style="display:flex;justify-content:flex-end;">'+btnLocal+'</div>';
+  } else if(r.type==='serverOnly'){
+    inner='<div style="font-size:12px;color:#9a3412;margin-bottom:10px;">サーバーにだけあり、この端末にありません。</div><div style="display:flex;justify-content:flex-end;">'+btnServer+'</div>';
+  } else {
+    var g='<div style="display:grid;grid-template-columns:84px 1fr 1fr;row-gap:5px;column-gap:8px;align-items:center;font-size:12px;"><div></div><div style="color:#94a3b8;font-weight:600;">この端末</div><div style="color:#94a3b8;font-weight:600;">サーバー</div>';
+    r.diffs.forEach(function(d){
+      if(d.kind==='diff'){ g+='<div style="color:#475569;">'+esc(d.label)+'</div><div style="grid-column:2 / 4;color:#dc2626;font-weight:600;">サーバーと違います</div>'; }
+      else { g+='<div style="color:#475569;">'+esc(d.label)+'</div><div style="color:#0f172a;">'+esc(d.local)+'</div><div style="color:#dc2626;font-weight:600;">'+esc(d.server)+'</div>'; }
+    });
+    g+='</div>';
+    inner=g+'<div style="display:grid;grid-template-columns:84px 1fr 1fr;column-gap:8px;margin-top:12px;"><div></div>'+btnLocal+btnServer+'</div>';
+  }
+  return '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:12px 14px;margin-bottom:9px;">'+head+inner+'</div>';
+}
+function mcResolve(id, side){
+  var local=(_members||[]).find(function(x){ return x.id===id; });
+  var server=_memberCheckServer[id];
+  if(side==='local'){
+    if(!local){ showToast('この端末に対象が見つかりません', true); return; }
+    saveOneStudentToGas(local).then(function(){ showToast((local.name||'会員')+' をサーバーへ保存しました'); loadMemberServerCheck(); });
+  } else {
+    if(!server){ showToast('サーバーに対象が見つかりません', true); return; }
+    var idx=(_members||[]).findIndex(function(x){ return x.id===id; });
+    if(idx>=0) _members[idx]=server; else _members.push(server);
+    saveToCache(); renderList(); updateClassroomFilter();
+    showToast((server.name||'会員')+' をサーバーの内容に更新しました');
+    loadMemberServerCheck();
+  }
 }
 
 // ===== JSONインポート =====
@@ -5080,24 +5296,8 @@ function importStudentsJson(input){
   reader.readAsText(file, 'utf-8');
 }
 
-function saveAllToGas(){
-  var url=getGasUrl();
-  if(!url){ showToast('設定でGAS URLを入力してください',true); switchTab('settings'); return; }
-  if(!_members.length){ showToast('保存するデータがありません',true); return; }
-  var btn=document.getElementById('btnSaveAll');
-  btn.textContent='保存中...'; btn.disabled=true;
-  var fd=new FormData();
-  fd.append('action','updateStudents');
-  fd.append('students',JSON.stringify(_members));
-  fetch(url,{method:'POST',body:fd})
-    .then(function(r){ return r.json(); })
-    .then(function(data){
-      if(data&&data.success){ showToast(_members.length+'人をGASに保存しました'); }
-      else { showToast('GAS保存エラー：'+(data&&data.error||'不明'),true); }
-    })
-    .catch(function(e){ showToast('GAS保存エラー：'+e.message,true); })
-    .finally(function(){ btn.textContent='💾 保存'; btn.disabled=false; });
-}
+// 2026-07-08 全件上書き撤廃（川上さん決定・案A）：「保存」ボタンは撤去。全件保存は廃止（編集は自動で差分保存される）。
+function saveAllToGas(){ showToast('全件保存は廃止しました（編集は自動で差分保存されます）'); }
 
 // ===== localStorage =====
 function saveToCache(){ try{ localStorage.setItem('sm_students_cache',JSON.stringify(_members)); }catch(e){} }
@@ -9119,7 +9319,7 @@ function confirmEnrollMergeProceed(iq){
     m.interviews.push({ id: genId(), date: visitDate, label: 'join', content: iq.interviewMemo.trim(), isTask: false, due: '', taskDone: false });
   }
   renderList(); updateClassroomFilter();
-  saveToCache(); saveOneStudentToGas(m);
+  saveToCache(); saveOneStudentToGas(m); // 検知策B/案1(2026-07-08)：保存直後にサーバー照合（saveOneStudentToGas内蔵）
   iq.enrolledToMember = true;
   saveInquiriesToCache();
   // タスク発火は統合前に持っていなかったコースのみ（川上さん決定 2026-07-06）
@@ -10063,7 +10263,7 @@ function checkAutoLeave(){
     saveToCache(); renderList();
     // 事故防止(2026-06-27)：全件上書き(saveToGas)をやめ、状態が変わった生徒だけ差分保存する。
     // 古いキャッシュで全件上書きされ面談記録が消える事故(2026-06-26)の再発防止。
-    changedMembers.forEach(function(cm){ if(typeof saveOneStudentToGas==='function') saveOneStudentToGas(cm); });
+    changedMembers.forEach(function(cm){ if(typeof saveOneStudentToGas==='function') saveOneStudentToGas(cm, {skipVerify:true}); });
   }
 }
 
