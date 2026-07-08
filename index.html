@@ -2200,8 +2200,7 @@ function switchTab(tab){
       window._lastGasSync = now;
       // 会員データ（保存中は取得スキップ）
       if(!window._memberSaving){
-        fetch(getGasUrl()+'?action=getStudents')
-          .then(function(r){ return r.json(); })
+        smFetchJson(getGasUrl()+'?action=getStudents', 3)
           .then(function(data){
             if(window._memberSaving) return; // fetch中に保存が始まった場合はスキップ
             if(data && data.students){
@@ -4706,6 +4705,19 @@ function confirmDelete(){
 
 // ===== GAS連携 =====
 
+function smFetchJson(url, tries){
+  tries = tries || 3;
+  return fetch(url).then(function(r){ return r.text(); }).then(function(t){
+    try{ return JSON.parse(t); }
+    catch(e){
+      if(tries>1){ return new Promise(function(res){ setTimeout(res, 800); }).then(function(){ return smFetchJson(url, tries-1); }); }
+      throw new Error('サーバー応答が不正（数回やり直しても失敗）');
+    }
+  }, function(err){
+    if(tries>1){ return new Promise(function(res){ setTimeout(res, 800); }).then(function(){ return smFetchJson(url, tries-1); }); }
+    throw err;
+  });
+}
 function loadFromGas(){
   var url=getGasUrl();
   if(!url){ showToast('設定でGAS URLを入力してください',true); switchTab('settings'); return; }
@@ -4714,8 +4726,7 @@ function loadFromGas(){
   if(btn){ btn.innerHTML='<span style="display:inline-block;animation:spin 0.8s linear infinite;margin-right:3px;">⟳</span>同期中...'; btn.disabled=true; btn.style.color='#c6000b'; }
   if(logoDiv){ logoDiv.style.opacity='0.5'; }
   showToast('データを読み込み中...');
-  fetch(url+'?action=getStudents')
-    .then(function(r){ return r.json(); })
+  smFetchJson(url+'?action=getStudents', 4)
     .then(function(data){
       if(data&&data.students){
         var gasStudents = data.students.map(normalizeStudent);
@@ -5098,7 +5109,7 @@ function showMemberSaveWarning(m, reasons){
 // 案1(2026-07-08)：一括保存の直後にサーバー全件を1回取り直し、渡した会員がサーバーと一致するか照合
 function verifyManySaved(list){
   var url=getGasUrl(); if(!url || !list || !list.length) return;
-  fetch(url+'?action=getStudents&_t='+Date.now()).then(function(r){ return r.json(); }).then(function(data){
+  smFetchJson(url+'?action=getStudents&_t='+Date.now(), 3).then(function(data){
     if(!data||!data.students) return;
     var map={}; data.students.map(normalizeStudent).forEach(function(sv){ if(sv.id) map[sv.id]=sv; });
     var bad=[];
@@ -5176,8 +5187,7 @@ function loadMemberServerCheck(){
   var url=getGasUrl();
   if(!url){ body.innerHTML='<div style="font-size:13px;color:#92400e;padding:16px;">GAS未接続のため確認できません</div>'; return; }
   body.innerHTML='<div style="font-size:13px;color:#64748b;padding:24px;text-align:center;">☁︎ サーバーから全会員を読み込んでいます…</div>';
-  fetch(url+'?action=getStudents&_t='+Date.now())
-    .then(function(r){ return r.json(); })
+  smFetchJson(url+'?action=getStudents&_t='+Date.now(), 3)
     .then(function(data){
       if(!data||!data.students){ body.innerHTML='<div style="font-size:13px;color:#dc2626;padding:16px;">取得に失敗しました</div>'; return; }
       var server=(data.students||[]).map(normalizeStudent);
