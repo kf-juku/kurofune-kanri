@@ -4720,6 +4720,21 @@ function smFetchJson(url, tries){
     throw err;
   });
 }
+// 保存POSTの再試行(2026-07-08)：GAS配信の間欠失敗で <!DOCTYPE 等が返ったら少し待って数回やり直す。
+// updateOneStudent/updateManyStudents/deleteOneStudent は id基準のupsert/削除で冪等なので、再送しても二重にならない。
+function smPostJson(url, fd, tries){
+  tries = tries || 3;
+  return fetch(url,{method:'POST',body:fd}).then(function(r){ return r.text(); }).then(function(t){
+    try{ return JSON.parse(t); }
+    catch(e){
+      if(tries>1){ return new Promise(function(res){ setTimeout(res, 800); }).then(function(){ return smPostJson(url, fd, tries-1); }); }
+      throw new Error('サーバー応答が不正（保存・数回やり直しても失敗）');
+    }
+  }, function(err){
+    if(tries>1){ return new Promise(function(res){ setTimeout(res, 800); }).then(function(){ return smPostJson(url, fd, tries-1); }); }
+    throw err;
+  });
+}
 function loadFromGas(){
   var url=getGasUrl();
   if(!url){ showToast('設定でGAS URLを入力してください',true); switchTab('settings'); return; }
@@ -5005,8 +5020,7 @@ function saveOneStudentToGas(m, opts){
   window._memberSaving = true;
   window._lastSavedId = m.id;
   window._lastSavedAt = Date.now();
-  return fetch(url,{method:'POST',body:fd})
-    .then(function(r){ return r.json(); })
+  return smPostJson(url, fd, 3)
     .then(function(data){
       window._lastGasSync = Date.now();
       window._memberSaving = false;
@@ -5034,8 +5048,7 @@ function updateManyStudentsToGas(list){
   fd.append('action','updateManyStudents');
   fd.append('students',JSON.stringify(list));
   window._memberSaving=true;
-  return fetch(url,{method:'POST',body:fd})
-    .then(function(r){ return r.json(); })
+  return smPostJson(url, fd, 3)
     .then(function(data){
       window._lastGasSync=Date.now(); window._memberSaving=false;
       if(!data||!data.success){ showToast('GAS保存に失敗しました（'+(data&&data.error||'不明')+'）', true); }
@@ -5051,8 +5064,7 @@ function deleteOneStudentFromGas(id, name){
   fd.append('action','deleteOneStudent');
   fd.append('id',id);
   window._memberSaving=true;
-  return fetch(url,{method:'POST',body:fd})
-    .then(function(r){ return r.json(); })
+  return smPostJson(url, fd, 3)
     .then(function(data){
       window._lastGasSync=Date.now(); window._memberSaving=false;
       if(!data||!data.success){ showToast('GAS削除に失敗しました（'+(data&&data.error||'不明')+'）', true); }
@@ -5065,8 +5077,7 @@ function deleteOneStudentFromGas(id, name){
 function verifyMemberSaved(m){
   var url=getGasUrl();
   if(!url || !m || !m.id) return;
-  fetch(url+'?action=getOneStudent&id='+encodeURIComponent(m.id)+'&_t='+Date.now())
-    .then(function(r){ return r.json(); })
+  smFetchJson(url+'?action=getOneStudent&id='+encodeURIComponent(m.id)+'&_t='+Date.now(), 3)
     .then(function(data){
       var sv = data && data.found && data.student;
       var diff=[];
@@ -5122,7 +5133,7 @@ function verifyManySaved(list){
 // 案1(2026-07-08)：削除の直後に、その会員がサーバーから本当に消えたか照合
 function verifyMemberDeleted(id, name){
   var url=getGasUrl(); if(!url || !id) return;
-  fetch(url+'?action=getOneStudent&id='+encodeURIComponent(id)+'&_t='+Date.now()).then(function(r){ return r.json(); }).then(function(data){
+  smFetchJson(url+'?action=getOneStudent&id='+encodeURIComponent(id)+'&_t='+Date.now(), 3).then(function(data){
     if(data && data.found) showToast('⚠️ '+(name||'会員')+' の削除がサーバーに反映されていない可能性があります', true);
   }).catch(function(){});
 }
@@ -5220,8 +5231,8 @@ function renderMemberServerCheck(server){
 }
 function memberCheckCard(r){
   var head='<div style="font-size:14px;font-weight:700;color:#0f172a;margin-bottom:10px;">'+esc(r.name)+'</div>';
-  var btnLocal='<button onclick="mcResolve(\''+esc(r.id)+'\',\'local\')" style="border:1px solid #cbd5e1;background:#fff;border-radius:8px;padding:7px 6px;cursor:pointer;font-size:12px;line-height:1.35;color:#0f172a;">この端末を正にする<span style="display:block;font-size:11px;color:#94a3b8;">サーバーへ保存</span></button>';
-  var btnServer='<button onclick="mcResolve(\''+esc(r.id)+'\',\'server\')" style="border:1px solid #cbd5e1;background:#fff;border-radius:8px;padding:7px 6px;cursor:pointer;font-size:12px;line-height:1.35;color:#0f172a;">サーバーを正にする<span style="display:block;font-size:11px;color:#94a3b8;">この端末を更新</span></button>';
+  var btnLocal='<button onclick="mcResolve(this,\''+esc(r.id)+'\',\'local\')" style="border:1px solid #cbd5e1;background:#fff;border-radius:8px;padding:7px 6px;cursor:pointer;font-size:12px;line-height:1.35;color:#0f172a;">この端末を正にする<span style="display:block;font-size:11px;color:#94a3b8;">サーバーへ保存</span></button>';
+  var btnServer='<button onclick="mcResolve(this,\''+esc(r.id)+'\',\'server\')" style="border:1px solid #cbd5e1;background:#fff;border-radius:8px;padding:7px 6px;cursor:pointer;font-size:12px;line-height:1.35;color:#0f172a;">サーバーを正にする<span style="display:block;font-size:11px;color:#94a3b8;">この端末を更新</span></button>';
   var inner='';
   if(r.type==='localOnly'){
     inner='<div style="font-size:12px;color:#9a3412;margin-bottom:10px;">この端末にだけあり、サーバーにありません（未保存の疑い）。</div><div style="display:flex;justify-content:flex-end;">'+btnLocal+'</div>';
@@ -5238,14 +5249,20 @@ function memberCheckCard(r){
   }
   return '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:12px 14px;margin-bottom:9px;">'+head+inner+'</div>';
 }
-function mcResolve(id, side){
+function mcResolve(btn, id, side){
+  // 即時ローディング（フリーズに見せない・ui-standardsルール 2026-07-08）
+  if(btn){
+    var wrap=btn.parentNode;
+    if(wrap && wrap.querySelectorAll){ wrap.querySelectorAll('button').forEach(function(b){ b.disabled=true; b.style.opacity='0.6'; }); }
+    btn.innerHTML='<span style="display:inline-block;width:12px;height:12px;border:2px solid #cbd5e1;border-top-color:#334155;border-radius:50%;animation:spin 0.7s linear infinite;vertical-align:-2px;margin-right:5px;"></span>処理中...';
+  }
   var local=(_members||[]).find(function(x){ return x.id===id; });
   var server=_memberCheckServer[id];
   if(side==='local'){
-    if(!local){ showToast('この端末に対象が見つかりません', true); return; }
+    if(!local){ showToast('この端末に対象が見つかりません', true); loadMemberServerCheck(); return; }
     saveOneStudentToGas(local).then(function(){ showToast((local.name||'会員')+' をサーバーへ保存しました'); loadMemberServerCheck(); });
   } else {
-    if(!server){ showToast('サーバーに対象が見つかりません', true); return; }
+    if(!server){ showToast('サーバーに対象が見つかりません', true); loadMemberServerCheck(); return; }
     var idx=(_members||[]).findIndex(function(x){ return x.id===id; });
     if(idx>=0) _members[idx]=server; else _members.push(server);
     saveToCache(); renderList(); updateClassroomFilter();
