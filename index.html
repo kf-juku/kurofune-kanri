@@ -6165,16 +6165,19 @@ function _levDist(a,b){
 }
 function _normSchool(x){ try{ return String(x||'').replace(/[\s　]/g,'').normalize('NFKC'); }catch(e){ return String(x||'').replace(/[\s　]/g,''); } }
 function findSimilarMaster(value, list){
-  var nv=_normSchool(value); var tv=schoolType(value); var res=[];
+  // 表記ブレ検出：似ていれば種別(小中高)が違っても候補として拾い、確認ポップを出す（追加は可）。
+  var nv=_normSchool(value); if(!nv) return [];
+  var res=[];
   var suf=/(小学校|中学校|高等学校|高校|小|中|高)$/;
+  var b=nv.replace(suf,'');                       // 追加値の語幹（末尾の小/中/高を除く）
   list.forEach(function(x){
     var nx=_normSchool(x); if(!nx) return;
-    if(nx===nv){ res.push(x); return; }
-    if(schoolType(x)!==tv) return;              // 種別が違えば別の学校として扱う（小と中など）
-    var a=nx.replace(suf,''), b=nv.replace(suf,'');
-    if(a && a===b){ res.push(x); return; }       // 語幹一致（公郷小/公郷小学校）
-    if(Math.min(nx.length,nv.length)>=2 && (nx.indexOf(nv)>=0 || nv.indexOf(nx)>=0)){ res.push(x); return; }
-    if(Math.max(nx.length,nv.length)>=3 && _levDist(nx,nv)<=1){ res.push(x); } // 1文字違い
+    if(nx===nv){ res.push(x); return; }                                   // 完全一致（正規化後）
+    var a=nx.replace(suf,'');
+    if(a.length>=2 && a===b){ res.push(x); return; }                      // 語幹一致（久里浜小/久里浜中・公郷小/公郷小学校）
+    if(Math.min(nx.length,nv.length)>=2 && (nx.indexOf(nv)>=0 || nv.indexOf(nx)>=0)){ res.push(x); return; } // 部分一致（公郷中央/公郷中）
+    if(Math.max(nx.length,nv.length)>=3 && _levDist(nx,nv)<=1){ res.push(x); return; } // 1文字違い（大津中/大律中・漢字違い）
+    if(a.length>=2 && b.length>=2 && _levDist(a,b)<=1){ res.push(x); }     // 語幹どうしが1文字違い（津久井/律久井 等）
   });
   return res;
 }
