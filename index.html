@@ -383,6 +383,10 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
 .master-add-input:focus { outline: none; border-color: var(--green); }
 .btn-tag-add { background: var(--crimson); color: white; border: none; border-radius: 7px; padding: 6px 14px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; }
 .btn-tag-add:hover { background: var(--crimson-dark); }
+.master-block { margin-bottom: 10px; }
+.master-block-title { font-size: 11px; font-weight: 800; color: #6b7280; margin: 6px 0 4px; }
+.master-tag .master-move { background: none; border: none; cursor: pointer; color: var(--crimson-mid); font-size: 9px; line-height: 1; padding: 0 1px; }
+.master-tag .master-move:disabled { color: #d1d5db; cursor: default; }
 
 /* ===== 一括入力モード ===== */
 .bulk-panel { display:none; flex-direction:column; min-height:0; }
@@ -1169,28 +1173,22 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
             <div class="settings-section-title">🏫 学校名
               <span class="tt save-badge gas">💾 GAS同期<span class="tt-body">GASのスプレッドシートに保存されます。追加・削除すると全端末・全スタッフに自動反映されます。</span></span>
             </div>
-            <div class="master-tag-area" id="schoolTags"></div>
+            <div class="settings-hint" style="font-size:11px;color:#6b7280;margin-bottom:8px;">小学校・中学校・高校ごとに分かれます。▲▼で並び替え（この順番がプルダウンに反映）。</div>
+            <div id="schoolMasterBlocks"></div>
             <div class="master-add-row">
               <input class="master-add-input" type="text" id="schoolInput" placeholder="例：久里浜小学校">
-              <button class="btn-tag-add" onclick="addMasterTag('sm_schools','schoolInput','schoolTags')">追加</button>
-            </div>
-            <div class="master-add-row" style="margin-top:6px;align-items:center;">
-              <button class="btn-tag-add" style="background:#0ea5e9;" onclick="importSchoolsFromStudents()">👥 生徒データから取り込み</button>
-              <span style="font-size:11px;color:#6b7280;margin-left:8px;">在籍・過去の生徒に入っている学校名をまとめて登録します</span>
+              <button class="btn-tag-add" onclick="addSchoolMaster('sm_schools','schoolInput')">追加</button>
             </div>
           </div>
           <div class="settings-section">
             <div class="settings-section-title">🎯 志望校
               <span class="tt save-badge gas">💾 GAS同期<span class="tt-body">GASのスプレッドシートに保存されます。追加・削除すると全端末・全スタッフに自動反映されます。</span></span>
             </div>
-            <div class="master-tag-area" id="targetSchoolTags"></div>
+            <div class="settings-hint" style="font-size:11px;color:#6b7280;margin-bottom:8px;">中学校・高校ごとに分かれます。▲▼で並び替え（この順番がプルダウンに反映）。</div>
+            <div id="targetMasterBlocks"></div>
             <div class="master-add-row">
               <input class="master-add-input" type="text" id="targetSchoolInput" placeholder="例：横須賀高校">
-              <button class="btn-tag-add" onclick="addMasterTag('sm_target_schools','targetSchoolInput','targetSchoolTags')">追加</button>
-            </div>
-            <div class="master-add-row" style="margin-top:6px;align-items:center;">
-              <button class="btn-tag-add" style="background:#0ea5e9;" onclick="importTargetSchoolsFromStudents()">👥 生徒データから取り込み</button>
-              <span style="font-size:11px;color:#6b7280;margin-left:8px;">生徒に入っている志望校をまとめて登録します</span>
+              <button class="btn-tag-add" onclick="addSchoolMaster('sm_target_schools','targetSchoolInput')">追加</button>
             </div>
           </div>
         </div>
@@ -1371,8 +1369,8 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
           <div class="d-group"><label class="d-label">教室</label><select class="d-select" id="dClassroom"></select></div>
         </div>
         <div class="d-row">
-          <div class="d-group"><label class="d-label">学校名</label><select class="d-select" id="dSchool"></select></div>
-          <div class="d-group"><label class="d-label">志望校</label><select class="d-select" id="dTargetSchool"></select></div>
+          <div class="d-group"><label class="d-label">学校名</label><select class="d-select" id="dSchool" data-master="sm_schools" onchange="onComboChange(this)"></select><div id="dSchoolNewWrap" style="display:none;gap:6px;margin-top:6px;"><input class="master-add-input" id="dSchoolNewInput" placeholder="新しい学校名"><button type="button" class="btn-tag-add" onclick="addComboNew('dSchool')">追加</button></div></div>
+          <div class="d-group"><label class="d-label">志望校</label><select class="d-select" id="dTargetSchool" data-master="sm_target_schools" onchange="onComboChange(this)"></select><div id="dTargetSchoolNewWrap" style="display:none;gap:6px;margin-top:6px;"><input class="master-add-input" id="dTargetSchoolNewInput" placeholder="新しい志望校"><button type="button" class="btn-tag-add" onclick="addComboNew('dTargetSchool')">追加</button></div></div>
         </div>
         <div class="d-row">
           <div class="d-group"><label class="d-label">保護者名</label><input type="text" class="d-input" id="dParent" placeholder="山田 花子"></div>
@@ -1589,7 +1587,7 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
         </div>
         <div class="form-group" style="margin:0;">
           <label class="form-label">学年</label>
-          <select class="form-select" id="addGrade">
+          <select class="form-select" id="addGrade" onchange="onAddGradeChange()">
             <option value="">（未設定）</option>
             <option>小1</option><option>小2</option><option>小3</option><option>小4</option>
             <option>小5</option><option>小6</option><option>中1</option><option>中2</option>
@@ -1614,11 +1612,13 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
         </div>
         <div class="form-group" style="margin:0;">
           <label class="form-label">学校名</label>
-          <select class="form-select" id="addSchool"></select>
+          <select class="form-select" id="addSchool" data-master="sm_schools" onchange="onComboChange(this)"></select>
+          <div id="addSchoolNewWrap" style="display:none;gap:6px;margin-top:6px;"><input class="master-add-input" id="addSchoolNewInput" placeholder="新しい学校名"><button type="button" class="btn-tag-add" onclick="addComboNew('addSchool')">追加</button></div>
         </div>
         <div class="form-group" style="margin:0;">
           <label class="form-label">志望校</label>
-          <select class="form-select" id="addTargetSchool"></select>
+          <select class="form-select" id="addTargetSchool" data-master="sm_target_schools" onchange="onComboChange(this)"></select>
+          <div id="addTargetSchoolNewWrap" style="display:none;gap:6px;margin-top:6px;"><input class="master-add-input" id="addTargetSchoolNewInput" placeholder="新しい志望校"><button type="button" class="btn-tag-add" onclick="addComboNew('addTargetSchool')">追加</button></div>
         </div>
       </div>
 
@@ -1737,7 +1737,7 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
         </div>
         <div class="form-group" style="margin:0;">
           <label class="form-label">学年</label>
-          <select class="form-select" id="enrollGrade">
+          <select class="form-select" id="enrollGrade" onchange="onEnrollGradeChange()">
             <option value="">選択</option>
             <option>小1</option><option>小2</option><option>小3</option>
             <option>小4</option><option>小5</option><option>小6</option>
@@ -1762,19 +1762,13 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
         </div>
         <div class="form-group" style="margin:0;">
           <label class="form-label">学校名</label>
-          <select class="form-select" id="enrollSchool" onchange="onEnrollSchoolChange()"></select>
-          <div id="enrollSchoolNewWrap" style="display:none;gap:6px;margin-top:6px;">
-            <input class="form-input" type="text" id="enrollSchoolNew" placeholder="新しい学校名（例：久里浜小学校）" style="flex:1;">
-            <button type="button" class="btn-tag-add" onclick="addEnrollSchoolNew()">追加</button>
-          </div>
+          <select class="form-select" id="enrollSchool" data-master="sm_schools" onchange="onComboChange(this)"></select>
+          <div id="enrollSchoolNewWrap" style="display:none;gap:6px;margin-top:6px;"><input class="master-add-input" id="enrollSchoolNewInput" placeholder="新しい学校名"><button type="button" class="btn-tag-add" onclick="addComboNew('enrollSchool')">追加</button></div>
         </div>
         <div class="form-group" style="margin:0;">
           <label class="form-label">志望校</label>
-          <select class="form-select" id="enrollTargetSchool" onchange="onEnrollTargetChange()"></select>
-          <div id="enrollTargetNewWrap" style="display:none;gap:6px;margin-top:6px;">
-            <input class="form-input" type="text" id="enrollTargetNew" placeholder="新しい志望校（例：横須賀高校）" style="flex:1;">
-            <button type="button" class="btn-tag-add" onclick="addEnrollTargetNew()">追加</button>
-          </div>
+          <select class="form-select" id="enrollTargetSchool" data-master="sm_target_schools" onchange="onComboChange(this)"></select>
+          <div id="enrollTargetSchoolNewWrap" style="display:none;gap:6px;margin-top:6px;"><input class="master-add-input" id="enrollTargetSchoolNewInput" placeholder="新しい志望校"><button type="button" class="btn-tag-add" onclick="addComboNew('enrollTargetSchool')">追加</button></div>
         </div>
       </div>
 
@@ -2518,8 +2512,8 @@ function openDetail(idx){
   document.getElementById('dGradeAuto').textContent='';
   populateDetailSelect('dClassroom',loadMaster(KEY_CLS,DEFAULT_CLS),m.classroom);
   // dYoubi廃止済み
-  populateDetailSelect('dSchool',loadMaster(KEY_SCHOOL,[]),m.school,true);
-  populateDetailSelect('dTargetSchool',loadMaster(KEY_TARGET,[]),m.targetSchool,true);
+  populateCombo('dSchool', KEY_SCHOOL, m.school, gradeToType(m.grade), '新しい学校を追加');
+  populateCombo('dTargetSchool', KEY_TARGET, m.targetSchool, gradeToTargetType(m.grade), '新しい志望校を追加');
   document.getElementById('dParent').value=m.parent||'';
   document.getElementById('dPhone').value=m.phone||'';
   document.getElementById('dEmail').value=m.email||'';
@@ -2774,8 +2768,8 @@ function saveDetail(){
 
   m.classroom   =document.getElementById('dClassroom').value;
   // m.youbi廃止済み（komasで管理）
-  m.school      =document.getElementById('dSchool').value;
-  m.targetSchool=document.getElementById('dTargetSchool').value;
+  m.school      =comboValue('dSchool');
+  m.targetSchool=comboValue('dTargetSchool');
   m.parent      =document.getElementById('dParent').value.trim();
   m.phone       =document.getElementById('dPhone').value.trim();
   m.email       =document.getElementById('dEmail').value.trim();
@@ -4645,8 +4639,8 @@ function openAddModal(){
   var classrooms=getClassrooms();
   var clsSel=document.getElementById('addClassroom');
   clsSel.innerHTML='<option value="">教室を選択</option>'+classrooms.map(function(c){ return '<option value="'+esc(c)+'">'+esc(c)+'</option>'; }).join('');
-  populateDetailSelect('addSchool', loadMaster(KEY_SCHOOL,[]), '', true);
-  populateDetailSelect('addTargetSchool', loadMaster(KEY_TARGET,[]), '', true);
+  populateCombo('addSchool', KEY_SCHOOL, '', gradeToType((document.getElementById('addGrade')||{}).value||''), '新しい学校を追加');
+  populateCombo('addTargetSchool', KEY_TARGET, '', gradeToTargetType((document.getElementById('addGrade')||{}).value||''), '新しい志望校を追加');
   renderAddKoma();
   document.getElementById('addOverlay').classList.add('show');
   setTimeout(function(){ document.getElementById('addName').focus(); },100);
@@ -4683,8 +4677,8 @@ function saveAdd(){
     parent:    (document.getElementById('addParent').value||'').trim(),
     contact:   (document.getElementById('addContact').value||'').trim(),
     email:     (document.getElementById('addEmail').value||'').trim(),
-    school:    document.getElementById('addSchool').value||'',
-    targetSchool: document.getElementById('addTargetSchool').value||'',
+    school:    comboValue('addSchool'),
+    targetSchool: comboValue('addTargetSchool'),
     youbi:     '',
     komas:      getKomasFromWrap('addKomaWrap'),
     policyMemo:'',
@@ -6070,144 +6064,189 @@ function getYoubi(){ try{ return JSON.parse(localStorage.getItem('sm_youbi')||'[
 function getSchools(){ try{ return JSON.parse(localStorage.getItem('sm_schools')||'[]'); }catch(e){ return []; } }
 function getTargetSchools(){ try{ return JSON.parse(localStorage.getItem('sm_target_schools')||'[]'); }catch(e){ return []; } }
 
-// ===== 入会モーダルの学校名：マスター連動プルダウン＋新規追加（2026-07-11 川上さん承認） =====
-function getEnrollSchoolValue(){
-  var el=document.getElementById('enrollSchool');
-  if(!el) return '';
-  var v=el.value||'';
-  if(v==='__addschool__') return '';
-  return String(v).trim();
+// ===== 学校名・志望校：小中高分類つき統一コンボボックス（2026-07-11 川上さん承認） =====
+var SCHOOL_TYPE_ORDER=['elem','junior','high','other'];
+var SCHOOL_TYPE_LABEL={elem:'小学校',junior:'中学校',high:'高校',other:'その他'};
+function schoolType(name){
+  var s=String(name||'').replace(/[\s　]/g,'');
+  if(/(高等学校|高校|高)$/.test(s)) return 'high';
+  if(/(中学校|中)$/.test(s)) return 'junior';
+  if(/(小学校|小)$/.test(s)) return 'elem';
+  return 'other';
 }
-function populateEnrollSchool(selected){
-  var el=document.getElementById('enrollSchool');
-  if(!el) return;
-  var list=getSchools();
-  var html='<option value="">未設定</option>'+list.map(function(v){
-    return '<option value="'+escAttr(v)+'"'+(v===selected?' selected':'')+'>'+esc(v)+'</option>';
-  }).join('');
+function gradeToType(grade){
+  var g=String(grade||'');
+  if(/^小/.test(g)) return 'elem';
+  if(/^中/.test(g)) return 'junior';
+  if(/^高/.test(g)) return 'high';
+  return '';
+}
+function gradeToTargetType(grade){
+  var g=String(grade||'');
+  if(/^小/.test(g)) return 'junior';
+  if(/^中/.test(g)) return 'high';
+  return '';
+}
+function buildSchoolOptions(list, selected, preferred, addLabel){
+  var groups={elem:[],junior:[],high:[],other:[]};
+  list.forEach(function(v){ groups[schoolType(v)].push(v); });
+  var order=SCHOOL_TYPE_ORDER.slice();
+  if(preferred && order.indexOf(preferred)>=0){ order=[preferred].concat(order.filter(function(t){return t!==preferred;})); }
+  var html='<option value="">未設定</option>';
+  order.forEach(function(t){
+    if(!groups[t].length) return;
+    html+='<optgroup label="'+SCHOOL_TYPE_LABEL[t]+'">';
+    groups[t].forEach(function(v){
+      html+='<option value="'+escAttr(v)+'"'+(v===selected?' selected':'')+'>'+esc(v)+'</option>';
+    });
+    html+='</optgroup>';
+  });
   if(selected && list.indexOf(selected)===-1){
-    html+='<option value="'+escAttr(selected)+'" selected>'+esc(selected)+' ※</option>';
+    html+='<optgroup label="未登録（マスター外）"><option value="'+escAttr(selected)+'" selected>'+esc(selected)+' ※</option></optgroup>';
   }
-  html+='<option value="__addschool__">＋ 新しい学校を追加…</option>';
-  el.innerHTML=html;
-  var wrap=document.getElementById('enrollSchoolNewWrap');
-  if(wrap) wrap.style.display='none';
+  if(addLabel){ html+='<option value="__addnew__">＋ '+esc(addLabel)+'…</option>'; }
+  return html;
 }
-function onEnrollSchoolChange(){
-  var el=document.getElementById('enrollSchool');
-  var wrap=document.getElementById('enrollSchoolNewWrap');
-  if(!el||!wrap) return;
-  if(el.value==='__addschool__'){
+function populateCombo(selId, key, selected, preferred, addLabel){
+  var sel=document.getElementById(selId); if(!sel) return;
+  sel.setAttribute('data-master', key);
+  sel.setAttribute('data-preferred', preferred||'');
+  sel.setAttribute('data-addlabel', addLabel||'');
+  sel.innerHTML=buildSchoolOptions(loadMaster(key,[]), selected||'', preferred||'', addLabel||'');
+  var wrap=document.getElementById(selId+'NewWrap'); if(wrap) wrap.style.display='none';
+}
+function repopulateCombo(sel, selected){
+  populateCombo(sel.id, sel.getAttribute('data-master'), selected, sel.getAttribute('data-preferred'), sel.getAttribute('data-addlabel'));
+}
+function comboValue(selId){
+  var sel=document.getElementById(selId); if(!sel) return '';
+  var v=sel.value||''; if(v==='__addnew__') return ''; return String(v).trim();
+}
+function onComboChange(sel){
+  var wrap=document.getElementById(sel.id+'NewWrap'); if(!wrap) return;
+  if(sel.value==='__addnew__'){
     wrap.style.display='flex';
-    var inp=document.getElementById('enrollSchoolNew');
+    var inp=document.getElementById(sel.id+'NewInput');
     if(inp){ inp.value=''; setTimeout(function(){ inp.focus(); },30); }
-  }else{
-    wrap.style.display='none';
-  }
+  } else { wrap.style.display='none'; }
 }
-function addEnrollSchoolNew(){
-  var inp=document.getElementById('enrollSchoolNew');
+function addComboNew(selId){
+  var sel=document.getElementById(selId); if(!sel) return;
+  var inp=document.getElementById(selId+'NewInput');
   var v=(inp&&inp.value?inp.value:'').trim();
-  if(!v){ showToast('学校名を入力してください',true); return; }
-  var list=getSchools();
+  if(!v){ showToast('名前を入力してください',true); return; }
+  var key=sel.getAttribute('data-master');
+  var list=loadMaster(key,[]);
   if(list.indexOf(v)===-1){
+    var sim=findSimilarMaster(v,list);
+    if(sim.length){
+      if(!confirm('「'+v+'」は既存の「'+sim.join('」「')+'」と似ています。\n同じ学校ならキャンセルして既存を選んでください。\n\n別の学校として新しく追加しますか？')){
+        repopulateCombo(sel, sim[0]);
+        return;
+      }
+    }
     list.push(v);
-    list.sort(function(a,b){ return String(a).localeCompare(String(b),'ja'); });
-    saveMaster(KEY_SCHOOL,list);
-    saveMastersToGas();
-    var st=document.getElementById('schoolTags'); if(st) renderMasterTags('sm_schools','schoolTags');
+    saveMaster(key,list); saveMastersToGas();
+    if(typeof renderSchoolMasters==='function') renderSchoolMasters();
     showToast('「'+v+'」をマスターに追加しました（GASに同期中）');
   }
-  populateEnrollSchool(v);
+  repopulateCombo(sel, v);
 }
-// ===== 既存生徒の学校名を学校名マスターへ一括取り込み（2026-07-11 川上さん承認） =====
-function importSchoolsFromStudents(){
-  var cur=getSchools();
-  var seen={};
-  cur.forEach(function(s){ if(s) seen[s]=true; });
-  var added=[];
-  (_members||[]).forEach(function(m){
-    var sc=(m&&m.school?String(m.school):'').trim();
-    if(sc && !seen[sc]){ seen[sc]=true; added.push(sc); }
+function _levDist(a,b){
+  a=String(a); b=String(b);
+  var m=a.length,n=b.length; if(!m) return n; if(!n) return m;
+  var d=[],i,j; for(i=0;i<=m;i++){ d[i]=[i]; }
+  for(j=0;j<=n;j++){ d[0][j]=j; }
+  for(i=1;i<=m;i++){ for(j=1;j<=n;j++){
+    var c=a.charAt(i-1)===b.charAt(j-1)?0:1;
+    d[i][j]=Math.min(d[i-1][j]+1, d[i][j-1]+1, d[i-1][j-1]+c);
+  }}
+  return d[m][n];
+}
+function _normSchool(x){ try{ return String(x||'').replace(/[\s　]/g,'').normalize('NFKC'); }catch(e){ return String(x||'').replace(/[\s　]/g,''); } }
+function findSimilarMaster(value, list){
+  var nv=_normSchool(value); var tv=schoolType(value); var res=[];
+  var suf=/(小学校|中学校|高等学校|高校|小|中|高)$/;
+  list.forEach(function(x){
+    var nx=_normSchool(x); if(!nx) return;
+    if(nx===nv){ res.push(x); return; }
+    if(schoolType(x)!==tv) return;              // 種別が違えば別の学校として扱う（小と中など）
+    var a=nx.replace(suf,''), b=nv.replace(suf,'');
+    if(a && a===b){ res.push(x); return; }       // 語幹一致（公郷小/公郷小学校）
+    if(Math.min(nx.length,nv.length)>=2 && (nx.indexOf(nv)>=0 || nv.indexOf(nx)>=0)){ res.push(x); return; }
+    if(Math.max(nx.length,nv.length)>=3 && _levDist(nx,nv)<=1){ res.push(x); } // 1文字違い
   });
-  if(added.length===0){ showToast('新しく取り込む学校名はありませんでした'); return; }
-  if(!confirm('生徒データから学校名を'+added.length+'件、マスターに取り込みます。\n（全端末・全スタッフに同期されます）\n\nよろしいですか？\n\n'+added.join('、'))) return;
-  var merged=cur.concat(added);
-  merged.sort(function(a,b){ return String(a).localeCompare(String(b),'ja'); });
-  saveMaster(KEY_SCHOOL,merged);
-  renderMasterTags('sm_schools','schoolTags');
-  saveMastersToGas();
-  showToast(added.length+'件の学校名を取り込みました（GASに同期中）');
+  return res;
 }
-
-// ===== 入会モーダルの志望校：マスター連動プルダウン＋新規追加（2026-07-11 川上さん承認） =====
-function getEnrollTargetValue(){
-  var el=document.getElementById('enrollTargetSchool');
-  if(!el) return '';
-  var v=el.value||'';
-  if(v==='__addtarget__') return '';
-  return String(v).trim();
+// ---- 設定：小中高ブロック表示＋▲▼並び替え ----
+function renderSchoolMasters(){
+  renderOneSchoolMaster('sm_schools','schoolMasterBlocks');
+  renderOneSchoolMaster('sm_target_schools','targetMasterBlocks');
 }
-function populateEnrollTarget(selected){
-  var el=document.getElementById('enrollTargetSchool');
-  if(!el) return;
-  var list=getTargetSchools();
-  var html='<option value="">未設定</option>'+list.map(function(v){
-    return '<option value="'+escAttr(v)+'"'+(v===selected?' selected':'')+'>'+esc(v)+'</option>';
-  }).join('');
-  if(selected && list.indexOf(selected)===-1){
-    html+='<option value="'+escAttr(selected)+'" selected>'+esc(selected)+' ※</option>';
-  }
-  html+='<option value="__addtarget__">＋ 新しい志望校を追加…</option>';
+function renderOneSchoolMaster(key, containerId){
+  var el=document.getElementById(containerId); if(!el) return;
+  var list=loadMaster(key,[]);
+  var groups={elem:[],junior:[],high:[],other:[]};
+  list.forEach(function(v){ groups[schoolType(v)].push(v); });
+  var html='';
+  SCHOOL_TYPE_ORDER.forEach(function(t){
+    var arr=groups[t]; if(!arr.length) return;
+    html+='<div class="master-block"><div class="master-block-title">'+SCHOOL_TYPE_LABEL[t]+'</div><div class="master-tag-area">';
+    arr.forEach(function(v,i){
+      var first=(i===0), last=(i===arr.length-1);
+      html+='<span class="master-tag">'
+        +'<button class="master-move" title="上へ" onclick="moveMasterItem(\''+key+'\',\''+escAttr(v)+'\',-1)"'+(first?' disabled':'')+'>▲</button>'
+        +'<button class="master-move" title="下へ" onclick="moveMasterItem(\''+key+'\',\''+escAttr(v)+'\',1)"'+(last?' disabled':'')+'>▼</button>'
+        +esc(v)
+        +'<button class="master-tag-del" onclick="deleteSchoolMaster(\''+key+'\',\''+escAttr(v)+'\')">×</button></span>';
+    });
+    html+='</div></div>';
+  });
+  if(!list.length) html='<div style="font-size:11px;color:#9ca3af;">まだ登録がありません</div>';
   el.innerHTML=html;
-  var wrap=document.getElementById('enrollTargetNewWrap');
-  if(wrap) wrap.style.display='none';
 }
-function onEnrollTargetChange(){
-  var el=document.getElementById('enrollTargetSchool');
-  var wrap=document.getElementById('enrollTargetNewWrap');
-  if(!el||!wrap) return;
-  if(el.value==='__addtarget__'){
-    wrap.style.display='flex';
-    var inp=document.getElementById('enrollTargetNew');
-    if(inp){ inp.value=''; setTimeout(function(){ inp.focus(); },30); }
-  }else{
-    wrap.style.display='none';
-  }
+function moveMasterItem(key, value, dir){
+  var list=loadMaster(key,[]);
+  var i=list.indexOf(value); if(i<0) return;
+  var t=schoolType(value);
+  var j=i+dir;
+  while(j>=0 && j<list.length && schoolType(list[j])!==t){ j+=dir; }
+  if(j<0 || j>=list.length) return;
+  var tmp=list[i]; list[i]=list[j]; list[j]=tmp;
+  saveMaster(key,list); saveMastersToGas(); renderSchoolMasters();
 }
-function addEnrollTargetNew(){
-  var inp=document.getElementById('enrollTargetNew');
+function deleteSchoolMaster(key, value){
+  var list=loadMaster(key,[]);
+  var i=list.indexOf(value); if(i<0) return;
+  if(!confirm('「'+value+'」をマスターから削除しますか？\n（生徒データの値は変わりません）')) return;
+  list.splice(i,1);
+  saveMaster(key,list); saveMastersToGas(); renderSchoolMasters();
+}
+function addSchoolMaster(key, inputId){
+  var inp=document.getElementById(inputId);
   var v=(inp&&inp.value?inp.value:'').trim();
-  if(!v){ showToast('志望校を入力してください',true); return; }
-  var list=getTargetSchools();
-  if(list.indexOf(v)===-1){
-    list.push(v);
-    list.sort(function(a,b){ return String(a).localeCompare(String(b),'ja'); });
-    saveMaster(KEY_TARGET,list);
-    saveMastersToGas();
-    var tt=document.getElementById('targetSchoolTags'); if(tt) renderMasterTags('sm_target_schools','targetSchoolTags');
-    showToast('「'+v+'」をマスターに追加しました（GASに同期中）');
+  if(!v) return;
+  var list=loadMaster(key,[]);
+  if(list.indexOf(v)>=0){ showToast('既に存在します',true); return; }
+  var sim=findSimilarMaster(v,list);
+  if(sim.length){
+    if(!confirm('「'+v+'」は既存の「'+sim.join('」「')+'」と似ています。\n同じ学校なら追加せず既存を使ってください。\n\n別の学校として追加しますか？')) return;
   }
-  populateEnrollTarget(v);
+  list.push(v);
+  saveMaster(key,list); saveMastersToGas(); renderSchoolMasters();
+  if(inp) inp.value='';
+  showToast('「'+v+'」を追加しました（GASに同期中）');
 }
-// ===== 既存生徒の志望校を志望校マスターへ一括取り込み（2026-07-11 川上さん承認） =====
-function importTargetSchoolsFromStudents(){
-  var cur=getTargetSchools();
-  var seen={};
-  cur.forEach(function(s){ if(s) seen[s]=true; });
-  var added=[];
-  (_members||[]).forEach(function(m){
-    var ts=(m&&m.targetSchool?String(m.targetSchool):'').trim();
-    if(ts && !seen[ts]){ seen[ts]=true; added.push(ts); }
-  });
-  if(added.length===0){ showToast('新しく取り込む志望校はありませんでした'); return; }
-  if(!confirm('生徒データから志望校を'+added.length+'件、マスターに取り込みます。\n（全端末・全スタッフに同期されます）\n\nよろしいですか？\n\n'+added.join('、'))) return;
-  var merged=cur.concat(added);
-  merged.sort(function(a,b){ return String(a).localeCompare(String(b),'ja'); });
-  saveMaster(KEY_TARGET,merged);
-  renderMasterTags('sm_target_schools','targetSchoolTags');
-  saveMastersToGas();
-  showToast(added.length+'件の志望校を取り込みました（GASに同期中）');
+// ---- 学年連動（追加フォーム・入会モーダル） ----
+function onAddGradeChange(){
+  var g=(document.getElementById('addGrade')||{}).value||'';
+  populateCombo('addSchool', KEY_SCHOOL, comboValue('addSchool'), gradeToType(g), '新しい学校を追加');
+  populateCombo('addTargetSchool', KEY_TARGET, comboValue('addTargetSchool'), gradeToTargetType(g), '新しい志望校を追加');
+}
+function onEnrollGradeChange(){
+  var g=(document.getElementById('enrollGrade')||{}).value||'';
+  populateCombo('enrollSchool', KEY_SCHOOL, comboValue('enrollSchool'), gradeToType(g), '新しい学校を追加');
+  populateCombo('enrollTargetSchool', KEY_TARGET, comboValue('enrollTargetSchool'), gradeToTargetType(g), '新しい志望校を追加');
 }
 
 // ===== 設定（旧 switchCfgTab は末尾の新実装に移譲） =====
@@ -6385,8 +6424,7 @@ function onSettingsTabShow(){
   loadSettings();
   renderMasterTags('sm_classrooms','classroomTags');
   renderMasterTags('sm_youbi','youbiTags');
-  renderMasterTags('sm_schools','schoolTags');
-  renderMasterTags('sm_target_schools','targetSchoolTags');
+  renderSchoolMasters();
   // タスクテンプレートタブが既に表示中なら描画
   var tmplPanel = document.getElementById('cfgTab-tmpl');
   if(tmplPanel && tmplPanel.classList.contains('active')){
@@ -9247,8 +9285,8 @@ function openEnrollPopup(iq){
   document.getElementById('enrollReading').value    = iq.reading||'';
   document.getElementById('enrollParent').value     = iq.parent||'';
   document.getElementById('enrollContact').value    = iq.contact||'';
-  populateEnrollSchool('');
-  populateEnrollTarget('');
+  populateCombo('enrollSchool', KEY_SCHOOL, '', gradeToType(iq.grade||''), '新しい学校を追加');
+  populateCombo('enrollTargetSchool', KEY_TARGET, '', gradeToTargetType(iq.grade||''), '新しい志望校を追加');
   document.getElementById('enrollGender').value     = '';
   // 学年セット
   var gradeEl = document.getElementById('enrollGrade');
@@ -9374,8 +9412,9 @@ function enrollMergeSelect(memberId){
   var set = function(id, v){ var el = document.getElementById(id); if(el && v && !el.value) el.value = v; };
   set('enrollName', m.name); set('enrollReading', m.reading); set('enrollGrade', m.grade);
   set('enrollGender', m.gender); set('enrollParent', m.parent); set('enrollContact', m.contact || m.phone);
-  var _tgSel = document.getElementById('enrollTargetSchool'); if(_tgSel && !_tgSel.value && m.targetSchool){ populateEnrollTarget(m.targetSchool); }
-  var _scSel = document.getElementById('enrollSchool'); if(_scSel && !_scSel.value && m.school){ populateEnrollSchool(m.school); }
+  var _egS=document.getElementById('enrollGrade'); var _egV=_egS?_egS.value:'';
+  var _ss=document.getElementById('enrollSchool'); if(_ss && !_ss.value && m.school){ populateCombo('enrollSchool', KEY_SCHOOL, m.school, gradeToType(_egV), '新しい学校を追加'); }
+  var _ts=document.getElementById('enrollTargetSchool'); if(_ts && !_ts.value && m.targetSchool){ populateCombo('enrollTargetSchool', KEY_TARGET, m.targetSchool, gradeToTargetType(_egV), '新しい志望校を追加'); }
   if(m.classroom){ var clSel = document.getElementById('enrollClassroom'); if(clSel && !clSel.value) clSel.value = m.classroom; }
   var cbJ = document.getElementById('enrollAttrJuku');
   var cbC = document.getElementById('enrollAttrCa');
@@ -9476,8 +9515,8 @@ function confirmEnrollMergeProceed(iq){
   m.gender = document.getElementById('enrollGender').value || m.gender || '';
   m.parent = val('enrollParent');
   m.contact = val('enrollContact');
-  m.school = getEnrollSchoolValue();
-  m.targetSchool = getEnrollTargetValue();
+  m.school = comboValue('enrollSchool');
+  m.targetSchool = comboValue('enrollTargetSchool');
   m.classroom = document.getElementById('enrollClassroom').value || m.classroom;
   m.enrollRoute = document.getElementById('enrollRoute') ? document.getElementById('enrollRoute').value : (m.enrollRoute||'');
   m.attrJuku = attrJuku;
@@ -9678,8 +9717,8 @@ function confirmEnrollProceed(){
     attrJuku:     document.getElementById('enrollAttrJuku').checked,
     attrCa:       document.getElementById('enrollAttrCa').checked,
     gender:       document.getElementById('enrollGender').value||'',
-    school:       getEnrollSchoolValue(),
-    targetSchool: getEnrollTargetValue(),
+    school:       comboValue('enrollSchool'),
+    targetSchool: comboValue('enrollTargetSchool'),
     birthdate:'', policyMemo:'',
     jukuEnroll: document.getElementById('enrollAttrJuku').checked ? (document.getElementById('enrollJukuEnroll').value||'') : '',
     komas:             getKomasFromWrap('enrollKomaWrap'),  // 土曜コマはKOMA_DEFに統合済み
