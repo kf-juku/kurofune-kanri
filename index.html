@@ -5084,25 +5084,45 @@ function deleteOneStudentFromGas(id, name){
 }
 
 // 検知策B(2026-07-08)：保存した生徒をサーバーから取り直し、在籍状態・コース・退会日が一致するか照合。ズレたら明確に警告。
+// この端末の m と、サーバーの1件取得(sv)を突き合わせてズレ項目の配列を返す（2026-07-14 空振りループ対策で関数分離）
+function _memberSaveDiff(m, sv){
+  var diff=[];
+  if(!sv){ diff.push('サーバーにこの生徒が見つかりません'); return diff; }
+  var chk=function(label,a,b){ if(String(a||'')!==String(b||'')) diff.push(label+'（この画面:'+(a||'空')+' ／ サーバー:'+(b||'空')+'）'); };
+  chk('在籍状態', m.status, sv.status);
+  chk('塾在籍', m.attrJuku?'有':'無', sv.attrJuku?'有':'無');
+  chk('CA在籍', m.attrCa?'有':'無', sv.attrCa?'有':'無');
+  chk('塾退会日', m.jukuLeave, sv.jukuLeave);
+  chk('CA退会日', m.caLeave, sv.caLeave);
+  return diff;
+}
+// サーバーから1件取り直してズレ配列を返す（通信/解析失敗はrejectで上に伝える）
+function _fetchMemberSaveDiff(m){
+  var url=getGasUrl();
+  return smFetchJson(url+'?action=getOneStudent&id='+encodeURIComponent(m.id)+'&_t='+Date.now(), 3)
+    .then(function(data){ return _memberSaveDiff(m, data && data.found && data.student); });
+}
+// 2026-07-14 空振りループ対策：ズレを検知しても即警告せず、0.8秒おいてもう1回だけ確認。2回連続でズレたときだけ赤モーダルを出す。
+// 保存は届いているのに直後の照合1往復だけ食い違う（GAS応答の間欠ズレ）ケースで、「再保存」を押しても繰り返す誤警告を防ぐ。
 function verifyMemberSaved(m){
   var url=getGasUrl();
   if(!url || !m || !m.id) return;
-  smFetchJson(url+'?action=getOneStudent&id='+encodeURIComponent(m.id)+'&_t='+Date.now(), 3)
-    .then(function(data){
-      var sv = data && data.found && data.student;
-      var diff=[];
-      if(!sv){ diff.push('サーバーにこの生徒が見つかりません'); }
-      else {
-        var chk=function(label,a,b){ if(String(a||'')!==String(b||'')) diff.push(label+'（この画面:'+(a||'空')+' ／ サーバー:'+(b||'空')+'）'); };
-        chk('在籍状態', m.status, sv.status);
-        chk('塾在籍', m.attrJuku?'有':'無', sv.attrJuku?'有':'無');
-        chk('CA在籍', m.attrCa?'有':'無', sv.attrCa?'有':'無');
-        chk('塾退会日', m.jukuLeave, sv.jukuLeave);
-        chk('CA退会日', m.caLeave, sv.caLeave);
-      }
-      if(diff.length){ showMemberSaveWarning(m, diff); }
-    })
-    .catch(function(e){ showMemberSaveWarning(m, ['サーバー確認の通信に失敗しました']); });
+  var recheck=function(){
+    return new Promise(function(res){ setTimeout(res, 800); }).then(function(){ return _fetchMemberSaveDiff(m); });
+  };
+  _fetchMemberSaveDiff(m).then(function(diff1){
+    if(!diff1.length) return;                 // 1回目で一致＝OK（大多数はここで終わる）
+    return recheck().then(function(diff2){
+      if(diff2.length) showMemberSaveWarning(m, diff2);   // 2回連続でズレたときだけ警告
+    });
+  }).catch(function(){
+    // 1回目が通信/解析失敗：もう一度だけ試し、それでもダメなら通信失敗として通知
+    recheck().then(function(diff2){
+      if(diff2.length) showMemberSaveWarning(m, diff2);
+    }).catch(function(){
+      showMemberSaveWarning(m, ['サーバー確認の通信に失敗しました']);
+    });
+  });
 }
 // 検知策B(2026-07-08)：サーバー未反映を赤い専用モーダルで明確に知らせ、再保存導線を出す（トーストで流さない）
 function showMemberSaveWarning(m, reasons){
