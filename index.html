@@ -1416,6 +1416,7 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
                   <div style="display:flex;align-items:center;gap:6px;margin-top:6px;">
                     <input type="checkbox" id="dJukuLeaveConfirm" style="width:16px;height:16px;accent-color:#dc2626;" onchange="onJukuLeaveConfirm(this)">
                     <label for="dJukuLeaveConfirm" style="font-size:13px;font-weight:700;cursor:pointer;color:#92400e;">退会確定（チェックでタスク生成）</label>
+                    <button type="button" id="dJukuLeaveUnlock" onclick="unlockConfirm('juku','leave')" style="display:none;margin-left:4px;font-size:11px;font-weight:700;color:#dc2626;background:#fff;border:1px solid #dc2626;border-radius:6px;padding:2px 8px;cursor:pointer;line-height:1.4;">🔓 解除</button>
                   </div>
                 </div>
                 <div id="dJukuRestWrap" style="display:none;flex:1;">
@@ -1423,6 +1424,7 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
                   <div style="display:flex;align-items:center;gap:6px;margin-top:6px;">
                     <input type="checkbox" id="dJukuRestConfirm" style="width:16px;height:16px;accent-color:#d97706;" onchange="onJukuRestConfirm(this)">
                     <label for="dJukuRestConfirm" style="font-size:13px;font-weight:700;cursor:pointer;color:#92400e;">休会確定（チェックでタスク生成）</label>
+                    <button type="button" id="dJukuRestUnlock" onclick="unlockConfirm('juku','rest')" style="display:none;margin-left:4px;font-size:11px;font-weight:700;color:#d97706;background:#fff;border:1px solid #d97706;border-radius:6px;padding:2px 8px;cursor:pointer;line-height:1.4;">🔓 解除</button>
                   </div>
                 </div>
               </div>
@@ -1446,6 +1448,7 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
                   <div style="display:flex;align-items:center;gap:6px;margin-top:6px;">
                     <input type="checkbox" id="dCaLeaveConfirm" style="width:16px;height:16px;accent-color:#dc2626;" onchange="onCaLeaveConfirm(this)">
                     <label for="dCaLeaveConfirm" style="font-size:13px;font-weight:700;cursor:pointer;color:#92400e;">退会確定（チェックでタスク生成）</label>
+                    <button type="button" id="dCaLeaveUnlock" onclick="unlockConfirm('ca','leave')" style="display:none;margin-left:4px;font-size:11px;font-weight:700;color:#dc2626;background:#fff;border:1px solid #dc2626;border-radius:6px;padding:2px 8px;cursor:pointer;line-height:1.4;">🔓 解除</button>
                   </div>
                 </div>
                 <div id="dCaRestWrap" style="display:none;flex:1;">
@@ -1453,6 +1456,7 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
                   <div style="display:flex;align-items:center;gap:6px;margin-top:6px;">
                     <input type="checkbox" id="dCaRestConfirm" style="width:16px;height:16px;accent-color:#d97706;" onchange="onCaRestConfirm(this)">
                     <label for="dCaRestConfirm" style="font-size:13px;font-weight:700;cursor:pointer;color:#92400e;">休会確定（チェックでタスク生成）</label>
+                    <button type="button" id="dCaRestUnlock" onclick="unlockConfirm('ca','rest')" style="display:none;margin-left:4px;font-size:11px;font-weight:700;color:#d97706;background:#fff;border:1px solid #d97706;border-radius:6px;padding:2px 8px;cursor:pointer;line-height:1.4;">🔓 解除</button>
                   </div>
                 </div>
               </div>
@@ -2534,6 +2538,11 @@ function openDetail(idx){
   document.getElementById('dCaLeaveConfirm').checked=!!m.caLeaveConfirmed;
   document.getElementById('dJukuRestConfirm').checked=!!m.jukuRestConfirmed;
   document.getElementById('dCaRestConfirm').checked=!!m.caRestConfirmed;
+  // 確定済みのときだけ「解除」ボタンを表示
+  document.getElementById('dJukuLeaveUnlock').style.display = m.jukuLeaveConfirmed ? '' : 'none';
+  document.getElementById('dCaLeaveUnlock').style.display   = m.caLeaveConfirmed   ? '' : 'none';
+  document.getElementById('dJukuRestUnlock').style.display  = m.jukuRestConfirmed  ? '' : 'none';
+  document.getElementById('dCaRestUnlock').style.display    = m.caRestConfirmed    ? '' : 'none';
   // 手続きプルダウン初期値（退会データ優先）
   document.getElementById('dJukuProc').value = (m.jukuLeave||m.jukuLeaveConfirmed) ? 'leave' : ((m.jukuRest||m.jukuRestConfirmed) ? 'rest' : '');
   document.getElementById('dCaProc').value   = (m.caLeave||m.caLeaveConfirmed)     ? 'leave' : ((m.caRest||m.caRestConfirmed)     ? 'rest' : '');
@@ -8132,6 +8141,46 @@ function onCaRestConfirm(cb){
   fireIqTaskTrigger('rest_ca', restDate, '', cls, sName, '', undefined, m ? (m.grade||'') : '', m ? (m.reading||'') : '');
   m.caRestConfirmed = true;
   showToast('CAの休会タスクを生成しました。保存してください。');
+  saveDetail();
+}
+
+// ===== 休会確定・退会確定の解除（確認ポップ必須・生成タスクも削除） =====
+function unlockConfirm(course, kind){
+  if(_detailIdx === null) return;
+  var m = _members[_detailIdx];
+  if(!m) return;
+  var isJuku  = (course === 'juku');
+  var isLeave = (kind === 'leave');
+  var courseLabel = isJuku ? '進学塾' : 'CA';
+  var kindLabel   = isLeave ? '退会' : '休会';
+  var trigger = kind + '_' + course; // leave_juku / rest_juku / leave_ca / rest_ca
+  var dateProp = isJuku ? (isLeave ? 'jukuLeave' : 'jukuRest') : (isLeave ? 'caLeave' : 'caRest');
+  var confProp = isJuku ? (isLeave ? 'jukuLeaveConfirmed' : 'jukuRestConfirmed') : (isLeave ? 'caLeaveConfirmed' : 'caRestConfirmed');
+  var dateId = isJuku ? (isLeave ? 'dJukuLeave' : 'dJukuRest') : (isLeave ? 'dCaLeave' : 'dCaRest');
+  var confId = dateId + 'Confirm';
+  var unlockId = dateId + 'Unlock';
+  var procId = isJuku ? 'dJukuProc' : 'dCaProc';
+
+  if(!m[confProp]) return; // 未確定なら何もしない
+
+  var pending = (m.memos||[]).filter(function(r){ return r.isTask && r.trigger===trigger && !r.taskDone; }).length;
+  var msg = '【' + courseLabel + '】の' + kindLabel + '確定を解除します。\n\n'
+          + '・プルダウンを「なし」に戻せるようになります\n'
+          + (pending>0 ? ('・この確定で生成された未完了の' + kindLabel + 'タスク' + pending + '件を削除します\n') : '')
+          + '\nよろしいですか？';
+  if(!confirm(msg)) return;
+
+  m[confProp] = false;
+  m[dateProp] = '';
+  m.memos = (m.memos||[]).filter(function(r){ return !(r.isTask && r.trigger===trigger && !r.taskDone); });
+
+  var dEl = document.getElementById(dateId); if(dEl) dEl.value = '';
+  var cEl = document.getElementById(confId); if(cEl) cEl.checked = false;
+  var uEl = document.getElementById(unlockId); if(uEl) uEl.style.display = 'none';
+  var pEl = document.getElementById(procId); if(pEl) pEl.value = '';
+  updateProcVisibility(course);
+
+  showToast(courseLabel + 'の' + kindLabel + '確定を解除しました');
   saveDetail();
 }
 
