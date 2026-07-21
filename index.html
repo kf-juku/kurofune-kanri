@@ -2374,18 +2374,21 @@ function renderList(){
   }
   grid.innerHTML=filtered.map(function(m){
     var ri=_members.indexOf(m);
-    // コースクラス
-    var ac=m.attrJuku&&m.attrCa?'attr-both':m.attrJuku?'attr-juku':m.attrCa?'attr-ca':'';
+    // コースクラス（カード左端の色バー）。川上さん指示(2026-07-21)：休会/退会したコースの色は出さず、
+    // アクティブ（在籍）なコースだけで色を決める。例：塾在籍・CA休会→塾の色だけ（CAの青は出さない）。
+    var _tCS=new Date(); _tCS.setHours(0,0,0,0);
+    var _jCS=_courseState(!!m.attrJuku,m.jukuLeave,m.jukuRest,_tCS);
+    var _cCS=_courseState(!!m.attrCa,  m.caLeave,  m.caRest,  _tCS);
+    var _jukuAct=(_jCS==='在籍'), _caAct=(_cCS==='在籍');
+    var ac;
+    if(_jukuAct||_caAct){ ac=(_jukuAct&&_caAct)?'attr-both':(_jukuAct?'attr-juku':'attr-ca'); }
+    else { ac=m.attrJuku&&m.attrCa?'attr-both':m.attrJuku?'attr-juku':m.attrCa?'attr-ca':''; }
     // 休会はグレーアウト
     var sc=m.status==='休会'?'status-rest':'';
     var bs=m.status==='休会'?'<span class="badge badge-rest">休会</span>':m.status==='退会'?'<span class="badge badge-leave">退会</span>':'<span class="badge badge-active">在籍</span>';
     var bg=m.grade?'<span class="badge badge-grade grade-'+esc(m.grade)+'">'+esc(m.grade)+'</span>':'';
     var jukuClsCls = m.classroom==='北久里浜'?'badge-cls-kk':m.classroom==='久里浜'?'badge-cls-kr':'';
-    // 川上さん指示(2026-07-21)：コースごとに在籍を判定し、休会/退会のコースはグレー＋状態表示にする。
-    // 全体は在籍でも、片方のコースを休会した子（例：塾在籍・CA休会）を一覧で見分けられるようにする。
-    var _tCS=new Date(); _tCS.setHours(0,0,0,0);
-    var _jCS=_courseState(!!m.attrJuku,m.jukuLeave,m.jukuRest,_tCS);
-    var _cCS=_courseState(!!m.attrCa,  m.caLeave,  m.caRest,  _tCS);
+    // 川上さん指示(2026-07-21)：休会/退会のコースはバッジをグレー＋状態表示（_jCS/_cCSは上で算出済み）
     var _jukuOff=(_jCS==='休会'||_jCS==='退会');
     var _caOff  =(_cCS==='休会'||_cCS==='退会');
     var _offSty=' style="opacity:.5;filter:grayscale(.8);"';
