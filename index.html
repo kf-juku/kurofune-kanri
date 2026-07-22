@@ -1415,14 +1415,14 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
                   <input class="d-input" type="date" id="dJukuLeave" oninput="onJukuLeaveInput()" title="最終授業日を入力してください">
                   <div style="display:flex;align-items:center;gap:6px;margin-top:6px;">
                     <input type="checkbox" id="dJukuLeaveConfirm" style="width:16px;height:16px;accent-color:#dc2626;" onchange="onJukuLeaveConfirm(this)">
-                    <label for="dJukuLeaveConfirm" style="font-size:13px;font-weight:700;cursor:pointer;color:#92400e;">退会確定（チェックでタスク生成）</label>
+                    <label for="dJukuLeaveConfirm" style="font-size:13px;font-weight:700;cursor:pointer;color:#92400e;">退会確定（チェックでタスク生成）</label><button type="button" id="btnUnlockJukuLeave" onclick="unlockConfirm('juku','leave')" style="display:none;margin-left:6px;font-size:12px;padding:2px 8px;border:1px solid #dc2626;background:#fff;color:#dc2626;border-radius:6px;cursor:pointer;font-weight:700;">🔓 解除</button>
                   </div>
                 </div>
                 <div id="dJukuRestWrap" style="display:none;flex:1;">
                   <input class="d-input" type="date" id="dJukuRest" oninput="onJukuRestInput()" title="休会前最後の授業日を入力してください">
                   <div style="display:flex;align-items:center;gap:6px;margin-top:6px;">
                     <input type="checkbox" id="dJukuRestConfirm" style="width:16px;height:16px;accent-color:#d97706;" onchange="onJukuRestConfirm(this)">
-                    <label for="dJukuRestConfirm" style="font-size:13px;font-weight:700;cursor:pointer;color:#92400e;">休会確定（チェックでタスク生成）</label>
+                    <label for="dJukuRestConfirm" style="font-size:13px;font-weight:700;cursor:pointer;color:#92400e;">休会確定（チェックでタスク生成）</label><button type="button" id="btnUnlockJukuRest" onclick="unlockConfirm('juku','rest')" style="display:none;margin-left:6px;font-size:12px;padding:2px 8px;border:1px solid #d97706;background:#fff;color:#d97706;border-radius:6px;cursor:pointer;font-weight:700;">🔓 解除</button>
                   </div>
                 </div>
               </div>
@@ -1445,14 +1445,14 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
                   <input class="d-input" type="date" id="dCaLeave" oninput="onCaLeaveInput()" title="最終授業日を入力してください">
                   <div style="display:flex;align-items:center;gap:6px;margin-top:6px;">
                     <input type="checkbox" id="dCaLeaveConfirm" style="width:16px;height:16px;accent-color:#dc2626;" onchange="onCaLeaveConfirm(this)">
-                    <label for="dCaLeaveConfirm" style="font-size:13px;font-weight:700;cursor:pointer;color:#92400e;">退会確定（チェックでタスク生成）</label>
+                    <label for="dCaLeaveConfirm" style="font-size:13px;font-weight:700;cursor:pointer;color:#92400e;">退会確定（チェックでタスク生成）</label><button type="button" id="btnUnlockCaLeave" onclick="unlockConfirm('ca','leave')" style="display:none;margin-left:6px;font-size:12px;padding:2px 8px;border:1px solid #dc2626;background:#fff;color:#dc2626;border-radius:6px;cursor:pointer;font-weight:700;">🔓 解除</button>
                   </div>
                 </div>
                 <div id="dCaRestWrap" style="display:none;flex:1;">
                   <input class="d-input" type="date" id="dCaRest" oninput="onCaRestInput()" title="休会前最後の授業日を入力してください">
                   <div style="display:flex;align-items:center;gap:6px;margin-top:6px;">
                     <input type="checkbox" id="dCaRestConfirm" style="width:16px;height:16px;accent-color:#d97706;" onchange="onCaRestConfirm(this)">
-                    <label for="dCaRestConfirm" style="font-size:13px;font-weight:700;cursor:pointer;color:#92400e;">休会確定（チェックでタスク生成）</label>
+                    <label for="dCaRestConfirm" style="font-size:13px;font-weight:700;cursor:pointer;color:#92400e;">休会確定（チェックでタスク生成）</label><button type="button" id="btnUnlockCaRest" onclick="unlockConfirm('ca','rest')" style="display:none;margin-left:6px;font-size:12px;padding:2px 8px;border:1px solid #d97706;background:#fff;color:#d97706;border-radius:6px;cursor:pointer;font-weight:700;">🔓 解除</button>
                   </div>
                 </div>
               </div>
@@ -2546,6 +2546,11 @@ function openDetail(idx){
   document.getElementById('dCaLeaveConfirm').checked=!!m.caLeaveConfirmed;
   document.getElementById('dJukuRestConfirm').checked=!!m.jukuRestConfirmed;
   document.getElementById('dCaRestConfirm').checked=!!m.caRestConfirmed;
+  // 川上さん指示(2026-07-21)：確定済みのコースだけ🔓解除ボタンを表示（休会/退会の変更ルートを開く）
+  _toggleUnlockBtn('btnUnlockJukuLeave', !!m.jukuLeaveConfirmed);
+  _toggleUnlockBtn('btnUnlockCaLeave',   !!m.caLeaveConfirmed);
+  _toggleUnlockBtn('btnUnlockJukuRest',  !!m.jukuRestConfirmed);
+  _toggleUnlockBtn('btnUnlockCaRest',    !!m.caRestConfirmed);
   // 手続きプルダウン初期値（退会データ優先）
   document.getElementById('dJukuProc').value = (m.jukuLeave||m.jukuLeaveConfirmed) ? 'leave' : ((m.jukuRest||m.jukuRestConfirmed) ? 'rest' : '');
   document.getElementById('dCaProc').value   = (m.caLeave||m.caLeaveConfirmed)     ? 'leave' : ((m.caRest||m.caRestConfirmed)     ? 'rest' : '');
@@ -8166,11 +8171,11 @@ function onProcSelect(course){
   var restConfirmed  = m && (c?m.jukuRestConfirmed:m.caRestConfirmed);
   if(sel.value!=='leave' && leaveConfirmed){
     sel.value='leave'; updateProcVisibility(course);
-    showToast('退会確定済みのため変更できません', true); return;
+    showToast('退会確定済みです。変更するには右の「🔓解除」を押してください', true); return;
   }
   if(sel.value!=='rest' && restConfirmed){
     sel.value='rest'; updateProcVisibility(course);
-    showToast('休会確定済みのため変更できません', true); return;
+    showToast('休会確定済みです。変更するには右の「🔓解除」を押してください', true); return;
   }
   if(sel.value!=='leave'){
     document.getElementById(c?'dJukuLeave':'dCaLeave').value='';
@@ -8182,6 +8187,63 @@ function onProcSelect(course){
   }
   updateProcVisibility(course);
   saveDetail();
+}
+
+// ===== 休会確定・退会確定の解除（川上さん指示 2026-07-21）=====
+// 確定するとプルダウンが固定されるため、解除して「在籍に戻す／そのまま退会へ進める」ルートを開く。
+// 解除＝その確定フラグを外し・その日付をクリアし・この確定で生成された「未完了」自動タスクを削除。
+// 完了済みタスクは履歴として残す。塾/CA・休会/退会の4系統で対称に動く（片方のコースだけ操作、他方は触らない）。
+function _toggleUnlockBtn(id, on){
+  var b=document.getElementById(id); if(b) b.style.display = on ? '' : 'none';
+}
+function _removeAutoTasksByTrigger(m, trg){
+  // 会員に紐づく未完了の自動タスク（この確定で生成されたもの）を削除。完了済みは残す。
+  ['memos','interviews'].forEach(function(key){
+    if(!m[key]) return;
+    m[key] = m[key].filter(function(r){
+      return !(r && r.isTask && !r.taskDone && (r.trigger||'')===trg);
+    });
+  });
+  // 未紐付けの iqTasks（同トリガー・同名・未完了）も削除し、GASからも消す
+  var removed=[];
+  _iqTasks = (_iqTasks||[]).filter(function(t){
+    if(t && !t.taskDone && (t.trigger||'')===trg && (t.studentName||'')===(m.name||'')){ removed.push(t); return false; }
+    return true;
+  });
+  if(removed.length){
+    try{ saveIqTasks(); }catch(e){}
+    removed.forEach(function(t){ if(typeof deleteIqTaskFromGas==='function' && t.id) deleteIqTaskFromGas(t.id); });
+  }
+}
+function unlockConfirm(course, kind){
+  if(_detailIdx===null) return;
+  var m=_members[_detailIdx]; if(!m) return;
+  var c=(course==='juku');
+  var courseLabel=c?'塾':'CA';
+  var kindLabel=(kind==='leave')?'退会確定':'休会確定';
+  if(!confirm(courseLabel+'の'+kindLabel+'を解除します。よろしいですか？\n（日付をクリアし、この確定で生成された未完了タスクを削除します。完了済みタスクは残ります。プルダウンから在籍・退会へ変更できるようになります。）')) return;
+  var trg=(kind==='leave'?'leave_':'rest_')+(c?'juku':'ca');
+  // フラグ・日付をクリア（該当コース・該当種別のみ）
+  if(kind==='leave'){
+    if(c){ m.jukuLeave=''; m.jukuLeaveConfirmed=false; } else { m.caLeave=''; m.caLeaveConfirmed=false; }
+    var le=document.getElementById(c?'dJukuLeave':'dCaLeave'); if(le) le.value='';
+    var lc=document.getElementById(c?'dJukuLeaveConfirm':'dCaLeaveConfirm'); if(lc) lc.checked=false;
+  } else {
+    if(c){ m.jukuRest=''; m.jukuRestConfirmed=false; } else { m.caRest=''; m.caRestConfirmed=false; }
+    var re=document.getElementById(c?'dJukuRest':'dCaRest'); if(re) re.value='';
+    var rc=document.getElementById(c?'dJukuRestConfirm':'dCaRestConfirm'); if(rc) rc.checked=false;
+  }
+  // 生成済みの未完了タスクを削除
+  _removeAutoTasksByTrigger(m, trg);
+  // プルダウンを「なし」に戻してロック解除
+  var sel=document.getElementById(c?'dJukuProc':'dCaProc'); if(sel) sel.value='';
+  updateProcVisibility(course);
+  // 解除ボタンを隠す
+  _toggleUnlockBtn(c?(kind==='leave'?'btnUnlockJukuLeave':'btnUnlockJukuRest'):(kind==='leave'?'btnUnlockCaLeave':'btnUnlockCaRest'), false);
+  // 全体ステータスを再判定して保存
+  saveDetail();
+  if(typeof renderTasks==='function') renderTasks();
+  showToast(courseLabel+'の'+kindLabel+'を解除しました。プルダウンから在籍・退会に変更できます。');
 }
 
 // ステータス変更時の処理
