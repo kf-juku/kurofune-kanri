@@ -922,6 +922,7 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
         <div style="display:flex;gap:8px;">
           <button class="cfg-tab-btn active" id="statsBtnInquiry" onclick="switchStatsTab('inquiry')">📋 問い合わせ分析</button>
           <button class="cfg-tab-btn" id="statsBtnMember" onclick="switchStatsTab('member')">👥 会員分析</button>
+          <button class="cfg-tab-btn" id="statsBtnPrint" onclick="switchStatsTab('print')">🖨️ 印刷リスト</button>
         </div>
 
         <!-- ========== 問い合わせ分析 ========== -->
@@ -1034,6 +1035,8 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
           </div>
 
         </div>
+        <!-- 印刷用 生徒リスト（2026-08-04追加） -->
+        <div id="statsTabPrint" style="display:none;"></div>
       </div>
     </div>
     <!-- 成績一括入力 -->
@@ -10192,11 +10195,560 @@ function renderStatsMember(){
 function switchStatsTab(tab){
   document.getElementById('statsTabInquiry').style.display=tab==='inquiry'?'':'none';
   document.getElementById('statsTabMember').style.display =tab==='member' ?'':'none';
+  var pt=document.getElementById('statsTabPrint'); if(pt) pt.style.display=tab==='print'?'':'none';
   document.getElementById('statsBtnInquiry').classList.toggle('active',tab==='inquiry');
   document.getElementById('statsBtnMember').classList.toggle('active', tab==='member');
+  var pb=document.getElementById('statsBtnPrint'); if(pb) pb.classList.toggle('active', tab==='print');
   if(tab==='inquiry') renderStatsInquiry();
   if(tab==='member')  renderStatsMember();
+  if(tab==='print')   rpEnsureInit();
 }
+
+// =====================================================
+// 印刷用 生徒リスト（統計タブ）  2026-08-04 追加
+//  行=生徒／列=名前・学年固定＋空欄／見出し編集／学年順／A4縦横1枚自動縮小
+//  教室分割（表=北久里浜・裏=久里浜）／偶数行淡色／履歴（GAS共有）
+// =====================================================
+var RP = {
+  search:'',
+  exclude:{}, // 印刷から個別除外する生徒id（テストアカウント等）
+  split:false, sortDir:'asc', blankCols:7,
+  paper:'portrait', title:'生徒リスト',
+  headers:[['No.','氏名','学年','','','','','','','']], // 先頭2列は名前/学年、以降は空欄列の見出し（複数行可）
+  _inited:false, _loadedId:''
+};
+var _rpFilter = { status:['在籍'], attr:['juku'], classroom:[], grade:['中1','中2','中3'] }; // 既定=塾・中1〜3・在籍（会員一覧と同じ方式）
+var RP_WD = ['日','月','火','水','木','金','土'];
+var RP_GO={'小1':1,'小2':2,'小3':3,'小4':4,'小5':5,'小6':6,'中1':7,'中2':8,'中3':9,'高1':10,'高2':11,'高3':12};
+var RP_CLASS_ORDER=['北久里浜','久里浜']; // 表→裏
+
+function rpInjectStyles(){
+  if(document.getElementById('rpStyles')) return;
+  var css=''
+  +'#statsTabPrint .rp-toolbar{background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:12px;box-shadow:var(--shadow-sm);}'
+  +'#statsTabPrint .rp-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;}'
+  +'#statsTabPrint .rp-row:last-child{margin-bottom:0;}'
+  +'#statsTabPrint .rp-lbl{font-size:11px;color:#6b7280;font-weight:700;min-width:64px;}'
+  +'#statsTabPrint .rp-step{display:inline-flex;align-items:center;gap:6px;}'
+  +'#statsTabPrint .rp-step button{width:26px;height:26px;border-radius:6px;border:1.5px solid var(--border);background:#fff;font-size:15px;cursor:pointer;line-height:1;padding:0;}'
+  +'#statsTabPrint .rp-step .rp-num{min-width:22px;text-align:center;font-weight:800;font-size:14px;}'
+  +'#statsTabPrint .rp-search{flex:1;max-width:220px;border:1.5px solid var(--border);border-radius:7px;padding:6px 10px;font-family:inherit;font-size:12px;}'
+  +'#statsTabPrint .rp-act{font-size:12px;font-weight:700;border-radius:8px;padding:7px 14px;cursor:pointer;font-family:inherit;border:1.5px solid var(--crimson);background:var(--crimson);color:#fff;}'
+  +'#statsTabPrint .rp-act.ghost{background:#fff;color:var(--crimson);}'
+  +'#statsTabPrint .rp-act.gray{border-color:#d1d5db;background:#f3f4f6;color:#4b5563;}'
+  +'#statsTabPrint .rp-seg{display:inline-flex;border:1.5px solid var(--border);border-radius:8px;overflow:hidden;}'
+  +'#statsTabPrint .rp-seg button{border:none;background:#fff;font-size:12px;padding:6px 12px;cursor:pointer;font-family:inherit;color:#6b7280;}'
+  +'#statsTabPrint .rp-seg button.active{background:var(--crimson);color:#fff;font-weight:700;}'
+  +'#statsTabPrint .rp-count{font-size:12px;color:#6b7280;font-weight:700;margin-left:auto;}'
+  +'#statsTabPrint .rp-preview-wrap{background:#e5e7eb;border-radius:10px;padding:16px;overflow:auto;}'
+  +'#statsTabPrint .rp-preview-inner{display:flex;flex-direction:column;align-items:center;gap:16px;transform-origin:top center;}'
+  // ページ（プレビュー・印刷共通）
+  +'.rp-page{background:#fff;box-shadow:0 1px 6px rgba(0,0,0,.25);box-sizing:border-box;color:#111;font-family:"Noto Sans JP",sans-serif;}'
+  +'.rp-page.portrait{width:190mm;min-height:265mm;padding:0;}'
+  +'.rp-page.landscape{width:277mm;min-height:178mm;padding:0;}'
+  +'.rp-page-inner{padding:0;}'
+  +'.rp-head{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;margin-bottom:6px;}'
+  +'.rp-title{font-size:18px;font-weight:800;outline:none;}'
+  +'.rp-sub{font-size:13px;font-weight:700;color:#374151;white-space:nowrap;}'
+  +'.rp-table{width:100%;border-collapse:collapse;table-layout:fixed;}'
+  +'.rp-table th,.rp-table td{border:1px solid #111;padding:3px 5px;font-size:12px;line-height:1.25;overflow:hidden;word-break:break-all;}'
+  +'.rp-table thead th{background:#e5e7eb;font-weight:700;text-align:center;vertical-align:middle;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'
+  +'.rp-table td.rp-no{text-align:center;color:#374151;}'
+  +'.rp-table td.rp-name{text-align:left;font-weight:600;white-space:nowrap;overflow:hidden;}'
+  +'.rp-table td.rp-grade{text-align:center;white-space:nowrap;}'
+  +'.rp-table tbody tr:nth-child(even) td{background:#f2f4f7;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'
+  +'.rp-empty{padding:40px;text-align:center;color:#6b7280;font-size:13px;}'
+  +'.rp-overflow-note{margin-top:4px;font-size:11px;color:#b91c1c;font-weight:700;}'
+  +'.rp-table th.rp-hcell{position:relative;padding-right:15px;}'
+  +'.rp-hspan{outline:none;display:block;min-width:14px;}'
+  +'.rp-hdate{position:absolute;right:0;top:0;width:1px;height:1px;opacity:0;border:0;padding:0;pointer-events:none;}'
+  +'.rp-hcal{position:absolute;right:1px;top:1px;border:none;background:none;cursor:pointer;font-size:10px;line-height:1;padding:0;color:#64748b;}'
+  +'@media print{ .rp-hcal,.rp-hdate{display:none !important;} }'
+  +'.rp-table th.rp-exc,.rp-table td.rp-exc{width:8mm;text-align:center;border:none;background:transparent;padding:0 3px;}'
+  +'.rp-table th.rp-exc{font-size:9px;color:#94a3b8;font-weight:500;}'
+  +'.rp-table td.rp-exc{position:relative;}'
+  +'.rp-table td.rp-exc input{cursor:pointer;position:absolute;top:0;bottom:0;left:0;right:0;margin:auto;width:13px;height:13px;}'
+  +'.rp-table tbody tr.rp-excluded td{color:#c0392b;text-decoration:line-through;opacity:.55;}'
+  +'.rp-table tbody tr.rp-excluded td.rp-exc{text-decoration:none;opacity:1;}'
+  // 印刷本体（body直下）は画面では隠す
+  +'#rp-print-root{display:none;}'
+  +'@media print{'
+  +'  body.rp-printing > *:not(#rp-print-root){display:none !important;}'
+  +'  body.rp-printing #rp-print-root{display:block !important;position:static;width:auto;margin:0;}'
+  +'  #rp-print-root .rp-page{box-shadow:none;margin:0;}'
+  +'  #rp-print-root .rp-page + .rp-page{break-before:page;page-break-before:always;}'
+  +'}';
+  var st=document.createElement('style'); st.id='rpStyles'; st.textContent=css; document.head.appendChild(st);
+  if(!document.getElementById('rp-print-root')){
+    var pr=document.createElement('div'); pr.id='rp-print-root'; document.body.appendChild(pr);
+  }
+}
+
+function rpBuildControls(){
+  var host=document.getElementById('statsTabPrint');
+  if(!host) return;
+  var seg=function(id,cur,opts){ // opts:[{v,label}]
+    return '<div class="rp-seg" id="'+id+'">'+opts.map(function(o){
+      return '<button class="'+(o.v===cur?'active':'')+'" onclick="'+o.fn+'">'+o.label+'</button>';
+    }).join('')+'</div>';
+  };
+  var rf=function(k,v){ return _rpFilter[k].indexOf(v)>=0?' active':''; };
+  var h=''
+  +'<div class="rp-toolbar no-print">'
+  // 対象の絞り込み（会員一覧と同じ方式・スキル準拠）
+  +'<div class="rp-row"><span class="rp-lbl">ステータス</span>'
+    +'<button class="filter-chip'+rf('status','在籍')+'" data-fkey="status" data-fval="在籍" onclick="rpToggleFilter(this)">在籍</button>'
+    +'<button class="filter-chip'+rf('status','休会')+'" data-fkey="status" data-fval="休会" onclick="rpToggleFilter(this)">休会</button>'
+    +'<button class="filter-chip'+rf('status','退会')+'" data-fkey="status" data-fval="退会" onclick="rpToggleFilter(this)">退会</button>'
+    +'<span style="margin-left:8px;border-left:1px solid #e5e7eb;padding-left:8px;">'
+      +'<button class="filter-chip'+rf('attr','juku')+'" data-fkey="attr" data-fval="juku" onclick="rpToggleFilter(this)">塾</button>'
+      +'<button class="filter-chip'+rf('attr','ca')+'" data-fkey="attr" data-fval="ca" onclick="rpToggleFilter(this)" style="margin-left:4px;">CA</button>'
+    +'</span>'
+  +'</div>'
+  +'<div class="rp-row"><span class="rp-lbl">教室</span><div id="rpFilterChipClassroom" style="display:flex;gap:4px;flex-wrap:wrap;"></div></div>'
+  +'<div class="rp-row"><span class="rp-lbl">学年</span><div id="rpFilterChipGrade" style="display:flex;gap:4px;flex-wrap:wrap;"></div></div>'
+  +'<div class="rp-row">'
+    +'<input class="rp-search" id="rpSearch" placeholder="🔍 名前・学校で検索" oninput="rpOnSearch(this.value)">'
+    +'<label style="font-size:12px;display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="rpSplit" '+(RP.split?'checked':'')+' onchange="rpSetSplit(this.checked)">教室で分ける（表=北久里浜／裏=久里浜）</label>'
+    +'<span class="rp-count" id="rpCount">0人</span>'
+  +'</div>'
+  // レイアウト
+  +'<div class="rp-row" style="border-top:1px dashed #e5e7eb;padding-top:10px;">'
+    +'<span class="rp-lbl">空欄の列</span>'
+    +'<span class="rp-step"><button onclick="rpAddCols(-1)">−</button><span class="rp-num" id="rpColNum">'+RP.blankCols+'</span><button onclick="rpAddCols(1)">＋</button></span>'
+    +'<span style="width:10px;"></span><span class="rp-lbl" style="min-width:auto;">見出し行</span>'
+    +'<span class="rp-step"><button onclick="rpAddHeaderRow(-1)">−</button><span class="rp-num" id="rpHrNum">'+RP.headers.length+'</span><button onclick="rpAddHeaderRow(1)">＋</button></span>'
+    +'<span style="width:10px;"></span>'
+    +'<label style="font-size:11px;color:#6b7280;display:inline-flex;align-items:center;gap:4px;">開始日 <input type="date" id="rpSeqStart" style="font-size:12px;border:1.5px solid var(--border);border-radius:6px;padding:4px 6px;font-family:inherit;"></label>'
+    +'<button class="rp-act gray" style="padding:6px 12px;" onclick="rpFillDatesSeq()">📅 この日から連番</button>'
+    +'<span style="font-size:11px;color:#9ca3af;">※各見出しセルは直接入力、または📅でカレンダー個別指定。まとめて入れるときは開始日を選んで「この日から連番」</span>'
+  +'</div>'
+  +'<div class="rp-row">'
+    +'<span class="rp-lbl">並び順</span>'
+    +'<div class="rp-seg" id="rpSort">'
+      +'<button class="'+(RP.sortDir==='asc'?'active':'')+'" onclick="rpSetSort(\'asc\')">学年 昇順（小→高）</button>'
+      +'<button class="'+(RP.sortDir==='desc'?'active':'')+'" onclick="rpSetSort(\'desc\')">学年 降順（高→小）</button>'
+    +'</div>'
+    +'<span style="width:10px;"></span><span class="rp-lbl" style="min-width:auto;">用紙</span>'
+    +'<div class="rp-seg" id="rpPaper">'
+      +'<button class="'+(RP.paper==='portrait'?'active':'')+'" onclick="rpSetPaper(\'portrait\')">A4 縦</button>'
+      +'<button class="'+(RP.paper==='landscape'?'active':'')+'" onclick="rpSetPaper(\'landscape\')">A4 横</button>'
+    +'</div>'
+  +'</div>'
+  // アクション
+  +'<div class="rp-row" style="border-top:1px dashed #e5e7eb;padding-top:10px;">'
+    +'<button class="rp-act" onclick="rpPrint()">🖨️ 印刷</button>'
+    +'<button class="rp-act ghost" onclick="rpSaveHistory()">💾 履歴に保存</button>'
+    +'<button class="rp-act gray" onclick="rpOpenHistory()">📁 履歴を開く</button>'
+    +'<button class="rp-act gray" onclick="rpResetConfig()">× リセット</button>'
+  +'</div>'
+  +'</div>'
+  +'<div class="rp-preview-wrap"><div class="rp-preview-inner" id="rpPreview"></div></div>'
+  // 履歴モーダル
+  +'<div id="rpHistModal" class="overlay"><div class="modal" style="max-width:520px;"><div class="modal-head"><span class="modal-head-title">📁 印刷リストの履歴</span><button class="modal-close" onclick="rpCloseHistory()">×</button></div><div class="modal-body" id="rpHistBody" style="max-height:60vh;overflow:auto;"></div></div></div>';
+  host.innerHTML=h;
+  rpUpdateFilterChips();
+  var _ss=document.getElementById('rpSeqStart');
+  if(_ss){ var _t=rpToday(); _ss.value=_t.y+'-'+('0'+_t.m).slice(-2)+'-'+('0'+_t.d).slice(-2); }
+}
+
+// ---- 対象抽出 ----
+function rpFilterStudents(){
+  var f=_rpFilter, tx=(RP.search||'').toLowerCase();
+  var list=(window._members||[]).filter(function(m){
+    if(f.status.length && f.status.indexOf(m.status)<0) return false;
+    if(f.attr.length){
+      var ok=false;
+      if(f.attr.indexOf('juku')>=0 && m.attrJuku) ok=true;
+      if(f.attr.indexOf('ca')>=0   && m.attrCa)   ok=true;
+      if(!ok) return false;
+    }
+    if(f.classroom.length && f.classroom.indexOf(m.classroom)<0) return false;
+    if(f.grade.length && f.grade.indexOf(m.grade)<0) return false;
+    if(tx){
+      var t=[m.name,m.reading,m.school].map(function(v){return (v||'').toLowerCase();}).join(' ');
+      if(t.indexOf(tx)<0) return false;
+    }
+    return true;
+  });
+  list.sort(function(a,b){
+    var ga=RP_GO[a.grade]||99, gb=RP_GO[b.grade]||99;
+    if(ga!==gb) return RP.sortDir==='desc' ? gb-ga : ga-gb;
+    return (a.reading||a.name||'').localeCompare(b.reading||b.name||'','ja');
+  });
+  return list;
+}
+
+// ---- ページ分割 ----
+function rpPageGroups(list){
+  if(!RP.split) return [{label:'',rows:list}];
+  var groups=[];
+  RP_CLASS_ORDER.forEach(function(cls){
+    groups.push({label:cls, rows:list.filter(function(m){return m.classroom===cls;})});
+  });
+  var other=list.filter(function(m){return RP_CLASS_ORDER.indexOf(m.classroom)<0;});
+  if(other.length) groups.push({label:'その他', rows:other});
+  return groups;
+}
+
+// ---- テーブルHTML ----
+function rpEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+var RP_FIXED=3; // 固定列：No.・氏名・学年
+function rpTotalCols(){ return RP_FIXED+RP.blankCols; }
+
+function rpTableHtml(rows, editable){
+  var nCols=rpTotalCols(), R=RP.headers.length;
+  var ce=editable?' contenteditable="true"':'';
+  var thead='<thead>';
+  for(var r=0;r<R;r++){
+    thead+='<tr>';
+    if(r===0){
+      if(editable) thead+='<th class="rp-exc" rowspan="'+R+'" title="チェックで印刷から除外">除外</th>';
+      thead+='<th rowspan="'+R+'"'+ce+' oninput="rpHeaderEdit(0,0,this)" style="width:9mm;">'+rpEsc(RP.headers[0][0]||'No.')+'</th>';
+      thead+='<th rowspan="'+R+'"'+ce+' oninput="rpHeaderEdit(0,1,this)" style="width:24mm;">'+rpEsc(RP.headers[0][1]||'氏名')+'</th>';
+      thead+='<th rowspan="'+R+'"'+ce+' oninput="rpHeaderEdit(0,2,this)" style="width:14mm;">'+rpEsc(RP.headers[0][2]||'学年')+'</th>';
+    }
+    for(var c=RP_FIXED;c<nCols;c++){
+      var val=rpEsc((RP.headers[r]||[])[c]||'');
+      if(editable){
+        thead+='<th class="rp-hcell">'
+          +'<span class="rp-hspan" contenteditable="true" oninput="rpHeaderEdit('+r+','+c+',this)" onblur="rpHeaderBlur('+r+','+c+',this)">'+val+'</span>'
+          +'<input type="date" class="rp-hdate" onchange="rpHeaderPickDate('+r+','+c+',this.value)">'
+          +'<button type="button" class="rp-hcal" title="カレンダーで日付を選ぶ" onclick="rpOpenCellCal(this)">📅</button>'
+          +'</th>';
+      } else {
+        thead+='<th>'+val+'</th>';
+      }
+    }
+    thead+='</tr>';
+  }
+  thead+='</thead>';
+  var tbody='<tbody>';
+  var totalCols=nCols+(editable?1:0);
+  if(!rows.length){
+    tbody+='<tr><td colspan="'+totalCols+'" class="rp-empty">対象の生徒がいません</td></tr>';
+  } else {
+    var no=0;
+    rows.forEach(function(m){
+      var ex = editable && !!RP.exclude[m.id];
+      var noCell = ex ? '' : (++no);
+      tbody+='<tr'+(ex?' class="rp-excluded"':'')+'>';
+      if(editable) tbody+='<td class="rp-exc"><input type="checkbox" '+(ex?'checked':'')+' onchange="rpToggleExclude(\''+m.id+'\')" title="チェックで印刷から除外"></td>';
+      tbody+='<td class="rp-no">'+noCell+'</td><td class="rp-name">'+rpEsc(m.name)+'</td><td class="rp-grade">'+rpEsc(m.grade)+'</td>';
+      for(var c=RP_FIXED;c<nCols;c++) tbody+='<td></td>';
+      tbody+='</tr>';
+    });
+  }
+  tbody+='</tbody>';
+  return '<table class="rp-table">'+thead+tbody+'</table>';
+}
+function rpToggleExclude(id){ if(RP.exclude[id]) delete RP.exclude[id]; else RP.exclude[id]=true; rpRender(); }
+
+function rpPageHtml(group, editable, idx){
+  var sub = RP.split ? (group.label + (group.label==='北久里浜'?'（表）':group.label==='久里浜'?'（裏）':'')) : '全体';
+  var cnt = group.rows.filter(function(m){return !RP.exclude[m.id];}).length + '名';
+  var titleCe = editable?' contenteditable="true" oninput="rpTitleEdit(this)"':'';
+  return '<div class="rp-page '+RP.paper+'" data-idx="'+idx+'"><div class="rp-page-inner">'
+    +'<div class="rp-head"><div class="rp-title"'+titleCe+'>'+rpEsc(RP.title)+'</div>'
+    +'<div class="rp-sub">'+rpEsc(sub)+'　'+cnt+'</div></div>'
+    +rpTableHtml(group.rows, editable)+'</div></div>';
+}
+
+// ---- 描画（プレビュー） ----
+function rpRender(){
+  if(!document.getElementById('rpPreview')) return;
+  var list=rpFilterStudents();
+  var cntEl=document.getElementById('rpCount'); if(cntEl) cntEl.textContent=list.length+'人';
+  var groups=rpPageGroups(list);
+  var host=document.getElementById('rpPreview');
+  host.innerHTML=groups.map(function(g,i){return rpPageHtml(g,true,i);}).join('');
+  // 各ページを1枚に収める自動縮小
+  var pages=host.querySelectorAll('.rp-page');
+  for(var i=0;i<pages.length;i++) rpFitPage(pages[i]);
+  rpScalePreview();
+}
+
+// A4印刷領域の高さ(px)。@page余白8mm・.rp-pageのpaddingは0、コンテンツ幅=210-16/297-16
+function rpPageMaxHeightPx(){
+  // A4理論値ではなく、プリンタ/ブラウザの既定余白差を吸収する安全高さ（縦265mm/横178mm）に収める
+  var mm = (RP.paper==='portrait') ? 265 : 178;
+  return mm*3.7795275;
+}
+function rpFitPage(pageEl){
+  pageEl.style.fontSize='';
+  var table=pageEl.querySelector('.rp-table'); if(!table) return;
+  var inner=pageEl.querySelector('.rp-page-inner');
+  var contentH=function(){ return inner?inner.scrollHeight:pageEl.scrollHeight; }; // .rp-pageはmin-heightがあるので実コンテンツで測る
+  var maxH=rpPageMaxHeightPx();
+  // まず基準サイズ
+  var size=13;
+  applyFs(pageEl,size);
+  var guard=0;
+  while(contentH()>maxH && size>5 && guard<60){ size-=0.5; applyFs(pageEl,size); guard++; }
+  // 下限まで縮めても収まらない場合の注記（1枚厳守のため改ページはしない）
+  var warn=pageEl.querySelector('.rp-overflow-note');
+  if(contentH()>maxH+2){
+    if(!warn){ warn=document.createElement('div'); warn.className='rp-overflow-note'; inner.appendChild(warn); }
+    warn.textContent='※ 人数が多く1枚に収まりません。対象を絞り込むか用紙の向きを変えてください。';
+  } else if(warn){ warn.remove(); }
+  if(contentH()<=maxH+2) rpFillPage(pageEl,maxH); // 余白がもったいないので行高を広げて用紙を埋める
+  rpFitNames(pageEl); // 長い氏名は列幅内に自動縮小（1行維持・列は広げない）
+  function applyFs(el,fs){
+    var tb=el.querySelector('.rp-table'); if(!tb) return;
+    var pad=Math.max(1, Math.round(fs*0.26));
+    tb.querySelectorAll('th,td').forEach(function(cell){
+      cell.style.fontSize=fs+'px'; cell.style.lineHeight='1.2';
+      cell.style.paddingTop=pad+'px'; cell.style.paddingBottom=pad+'px';
+    });
+  }
+}
+// 長い氏名だけ、氏名列の幅に収まるようフォントを自動縮小（1行のまま・列幅は固定）
+function rpFitNames(pageEl){
+  var cells=pageEl.querySelectorAll('.rp-table td.rp-name');
+  for(var i=0;i<cells.length;i++){
+    var cell=cells[i];
+    var base=parseFloat(cell.style.fontSize)||parseFloat(getComputedStyle(cell).fontSize)||12; var fs=base; var g=0;
+    while(cell.scrollWidth>cell.clientWidth+1 && fs>6 && g<40){ fs-=0.5; cell.style.fontSize=fs+'px'; g++; }
+  }
+}
+// 余白が多いとき、行の高さを広げて用紙をなるべく埋める（1行の高さは上限あり）
+function rpFillPage(pageEl, maxH){
+  var tb=pageEl.querySelector('.rp-table'); if(!tb) return;
+  var rows=tb.querySelectorAll('tbody tr'); var n=rows.length; if(!n) return;
+  if(tb.querySelector('.rp-empty')) return;
+  var inner=pageEl.querySelector('.rp-page-inner');
+  var contentH=inner?inner.scrollHeight:pageEl.scrollHeight;
+  var slack=maxH-contentH-6;
+  if(slack<=2) return;
+  var MAXROW=68; // 1行の最大高さ 約18mm
+  var rowH=rows[0].getBoundingClientRect().height;
+  var target=Math.min(MAXROW, rowH + slack/n);
+  if(target<=rowH+0.5) return;
+  var add=(target-rowH)/2;
+  var tds=tb.querySelectorAll('tbody td');
+  for(var i=0;i<tds.length;i++){
+    var cp=parseFloat(getComputedStyle(tds[i]).paddingTop)||2;
+    tds[i].style.paddingTop=(cp+add)+'px'; tds[i].style.paddingBottom=(cp+add)+'px';
+  }
+}
+// プレビューを枠幅に合わせて縮小表示
+function rpScalePreview(){
+  var wrap=document.querySelector('#statsTabPrint .rp-preview-wrap');
+  var inner=document.getElementById('rpPreview');
+  if(!wrap||!inner) return;
+  inner.style.transform='';
+  var pageW=(RP.paper==='portrait'?194:281)*3.7795275;
+  var avail=wrap.clientWidth-32;
+  var scale=avail<pageW ? avail/pageW : 1;
+  inner.style.transform='scale('+scale+')';
+  inner.style.marginBottom=(scale<1? (inner.offsetHeight*(scale-1)) : 0)+'px';
+}
+
+// ---- 見出し・タイトル編集 ----
+function rpHeaderEdit(r,c,el){ if(!RP.headers[r]) RP.headers[r]=[]; RP.headers[r][c]=el.textContent; }
+function rpTitleEdit(el){ RP.title=el.textContent; syncTitleAcrossPages(); }
+function syncTitleAcrossPages(){ /* 入力中は他ページに反映しない（カーソル飛び防止） */ }
+
+// ---- コントロール操作 ----
+function rpToggleFilter(btn){
+  var k=btn.dataset.fkey, v=btn.dataset.fval, arr=_rpFilter[k], i=arr.indexOf(v);
+  if(i>=0){ arr.splice(i,1); btn.classList.remove('active'); }
+  else { arr.push(v); btn.classList.add('active'); }
+  rpRender();
+}
+function rpUpdateFilterChips(){
+  var mk=function(hostId,key,vals){
+    var el=document.getElementById(hostId); if(!el) return;
+    el.innerHTML='';
+    vals.forEach(function(v){
+      var b=document.createElement('button');
+      b.className='filter-chip'+(_rpFilter[key].indexOf(v)>=0?' active':'');
+      b.textContent=v; b.dataset.fkey=key; b.dataset.fval=v;
+      b.addEventListener('click',function(){ rpToggleFilter(b); });
+      el.appendChild(b);
+    });
+  };
+  var classrooms=(typeof loadMaster==='function' && typeof KEY_CLS!=='undefined')?loadMaster(KEY_CLS,DEFAULT_CLS):['北久里浜','久里浜'];
+  mk('rpFilterChipClassroom','classroom',classrooms);
+  var go=['小1','小2','小3','小4','小5','小6','中1','中2','中3','高1','高2','高3'];
+  var grades=[]; (window._members||[]).forEach(function(m){ if(m.grade && grades.indexOf(m.grade)<0) grades.push(m.grade); });
+  grades.sort(function(a,b){ return go.indexOf(a)-go.indexOf(b); });
+  mk('rpFilterChipGrade','grade',grades);
+}
+function rpOnSearch(v){ RP.search=v; if(document.getElementById('rpCount'))document.getElementById('rpCount').textContent=rpFilterStudents().length+'人'; clearTimeout(RP._st); RP._st=setTimeout(rpRender,200); }
+function rpSetSplit(b){ RP.split=b; rpRender(); }
+function rpAddCols(d){ RP.blankCols=Math.max(0,Math.min(20,RP.blankCols+d)); rpNormalizeHeaders(); document.getElementById('rpColNum').textContent=RP.blankCols; rpRender(); }
+function rpAddHeaderRow(d){
+  if(d>0){ RP.headers.push(new Array(rpTotalCols()).fill('')); }
+  else if(RP.headers.length>1){ RP.headers.pop(); }
+  document.getElementById('rpHrNum').textContent=RP.headers.length; rpRender();
+}
+function rpNormalizeHeaders(){
+  var n=rpTotalCols();
+  RP.headers.forEach(function(row){ while(row.length<n)row.push(''); if(row.length>n)row.length=n; });
+}
+function rpSetSort(v){ RP.sortDir=v; rpBuildControls(); rpAfterControl(); }
+function rpSetPaper(v){ RP.paper=v; rpBuildControls(); rpAfterControl(); }
+function rpAfterControl(){ // コントロール再描画後、検索欄の値を復元しつつ再描画
+  var s=document.getElementById('rpSearch'); if(s)s.value=RP.search;
+  rpRender();
+}
+function rpResetConfig(){
+  _rpFilter={status:['在籍'],attr:['juku'],classroom:[],grade:['中1','中2','中3']};
+  RP.exclude={};
+  RP.search='';RP.split=false;RP.sortDir='asc';RP.blankCols=7;RP.paper='portrait';RP.title='生徒リスト';RP.headers=[['No.','氏名','学年','','','','','','','']];RP._loadedId='';
+  rpBuildControls(); rpRender();
+}
+
+// ---- 印刷 ----
+function rpPrint(){
+  var list=rpFilterStudents().filter(function(m){ return !RP.exclude[m.id]; });
+  var groups=rpPageGroups(list);
+  var root=document.getElementById('rp-print-root');
+  root.className=''; // reset
+  root.innerHTML=groups.map(function(g,i){return rpPageHtml(g,false,i);}).join('');
+  // 印刷ルートは通常 display:none で高さが測れない（0になる）→ 一時的に画面外で可視化してフィット計算する
+  root.style.cssText='position:absolute;left:-10000px;top:0;display:block;width:auto;visibility:hidden;';
+  var pages=root.querySelectorAll('.rp-page');
+  for(var i=0;i<pages.length;i++) rpFitPage(pages[i]);
+  root.style.cssText=''; // 画面では隠し @media print に任せる（各セルのフィット結果=inlineスタイルは残る）
+  rpSetPageRule();
+  document.body.classList.add('rp-printing');
+  var cleanup=function(){ document.body.classList.remove('rp-printing'); window.removeEventListener('afterprint',cleanup); };
+  window.addEventListener('afterprint',cleanup);
+  setTimeout(function(){ window.print(); }, 60);
+}
+function rpSetPageRule(){
+  var id='rpPageRule'; var el=document.getElementById(id);
+  if(!el){ el=document.createElement('style'); el.id=id; document.head.appendChild(el); }
+  el.textContent='@media print{@page{size:A4 '+RP.paper+';margin:8mm;}}';
+}
+
+// ---- 履歴（GAS共有） ----
+function rpConfig(){
+  return {title:RP.title,filter:JSON.parse(JSON.stringify(_rpFilter)),search:RP.search,exclude:Object.keys(RP.exclude),
+    split:RP.split,sortDir:RP.sortDir,blankCols:RP.blankCols,paper:RP.paper,headers:JSON.parse(JSON.stringify(RP.headers))};
+}
+function rpApplyConfig(c){
+  if(!c) return;
+  RP.title=c.title||'生徒リスト';
+  var f=c.filter||{};
+  _rpFilter={status:Array.isArray(f.status)?f.status:['在籍'],attr:Array.isArray(f.attr)?f.attr:[],classroom:Array.isArray(f.classroom)?f.classroom:[],grade:Array.isArray(f.grade)?f.grade:[]};
+  RP.search=c.search||''; RP.split=!!c.split; RP.sortDir=c.sortDir||'asc';
+  RP.blankCols=(typeof c.blankCols==='number')?c.blankCols:7; RP.paper=c.paper||'portrait';
+  RP.headers=(Array.isArray(c.headers)&&c.headers.length)?c.headers:[['No.','氏名','学年','','','','','','','']];
+  RP.exclude={}; (Array.isArray(c.exclude)?c.exclude:[]).forEach(function(id){ RP.exclude[id]=true; });
+  rpNormalizeHeaders(); rpBuildControls(); rpAfterControl();
+}
+function rpGenId(){ return 'rp_'+Date.now()+'_'+Math.random().toString(36).slice(2,8); }
+function rpSaveHistory(){
+  var url=getGasUrl(); if(!url){ showToast('設定でGAS URLを入力してください',true); return; }
+  var _t=rpToday();
+  var defName=rpYmd(_t)+'_'+(RP.title||'生徒リスト');
+  var name=prompt('この印刷リストの名前を入力してください（先頭に日付を自動で入れています）', defName);
+  if(name===null) return; name=(name||'').trim(); if(!name){ showToast('名前を入力してください',true); return; }
+  var rec={ id:RP._loadedId||rpGenId(), title:name, createdBy:(typeof getStaffName_==='function'?getStaffName_():''), config:rpConfig() };
+  var fd=new FormData(); fd.append('action','savePrintRoster'); fd.append('roster',JSON.stringify(rec));
+  showToast('履歴に保存中...');
+  smPostJson(url,fd,3).then(function(d){
+    if(d&&d.success){ RP._loadedId=rec.id; RP.title=name; showToast('履歴に保存しました'); rpRender(); }
+    else showToast('履歴の保存に失敗しました（'+((d&&d.error)||'不明')+'）',true);
+  }).catch(function(){ showToast('履歴の保存に失敗しました',true); });
+}
+function rpOpenHistory(){
+  var url=getGasUrl(); if(!url){ showToast('設定でGAS URLを入力してください',true); return; }
+  var body=document.getElementById('rpHistBody'); body.innerHTML='<div style="padding:20px;text-align:center;color:#6b7280;">読み込み中...</div>';
+  document.getElementById('rpHistModal').classList.add('show');
+  smFetchJson(url+'?action=getPrintRosters',3).then(function(d){
+    var list=(d&&d.rosters)||[];
+    if(!list.length){ body.innerHTML='<div style="padding:20px;text-align:center;color:#6b7280;">保存された履歴はありません</div>'; return; }
+    list.sort(function(a,b){ return String(b.updatedAt||'').localeCompare(String(a.updatedAt||'')); });
+    body.innerHTML=list.map(function(r){
+      return '<div style="display:flex;align-items:center;gap:8px;border:1px solid #e5e7eb;border-radius:8px;padding:10px 12px;margin-bottom:8px;">'
+        +'<div style="flex:1;min-width:0;"><div style="font-weight:700;font-size:13px;">'+rpEsc(r.title)+'</div>'
+        +'<div style="font-size:11px;color:#9ca3af;">'+rpEsc(r.updatedAt||r.createdAt||'')+(r.createdBy?'・'+rpEsc(r.createdBy):'')+'</div></div>'
+        +'<button class="rp-act" style="padding:5px 10px;" onclick="rpLoadHistory(\''+r.id+'\')">開く</button>'
+        +'<button class="rp-act gray" style="padding:5px 10px;" onclick="rpDupHistory(\''+r.id+'\')">複製</button>'
+        +'<button class="rp-act gray" style="padding:5px 10px;color:#b91c1c;border-color:#fecaca;" onclick="rpDelHistory(\''+r.id+'\',\''+rpEsc(r.title).replace(/\'/g,"")+'\')">削除</button>'
+        +'</div>';
+    }).join('');
+    RP._histCache=list;
+  }).catch(function(){ body.innerHTML='<div style="padding:20px;text-align:center;color:#b91c1c;">読み込みに失敗しました</div>'; });
+}
+function rpCloseHistory(){ document.getElementById('rpHistModal').classList.remove('show'); }
+function rpLoadHistory(id){
+  var r=(RP._histCache||[]).find(function(x){return x.id===id;}); if(!r) return;
+  RP._loadedId=r.id; rpApplyConfig(r.config); rpCloseHistory(); showToast('履歴を読み込みました');
+}
+function rpDupHistory(id){
+  var r=(RP._histCache||[]).find(function(x){return x.id===id;}); if(!r) return;
+  RP._loadedId=''; rpApplyConfig(r.config); RP.title=(r.title||'')+'（複製）'; rpCloseHistory(); rpBuildControls(); rpAfterControl(); showToast('複製しました。内容を確認して保存してください');
+}
+function rpDelHistory(id,title){
+  if(!confirm('「'+title+'」を履歴から削除しますか？')) return;
+  var url=getGasUrl(); var fd=new FormData(); fd.append('action','deletePrintRoster'); fd.append('id',id);
+  smPostJson(url,fd,3).then(function(d){ if(d&&d.success){ if(RP._loadedId===id)RP._loadedId=''; showToast('削除しました'); rpOpenHistory(); } else showToast('削除に失敗しました',true); }).catch(function(){ showToast('削除に失敗しました',true); });
+}
+
+// ---- 日付ヘルパー（JST） ----
+function rpToday(){ var d=new Date(Date.now()+9*3600*1000); return {y:d.getUTCFullYear(),m:d.getUTCMonth()+1,d:d.getUTCDate(),wd:d.getUTCDay()}; }
+function rpYmd(o){ return ''+o.y+('0'+o.m).slice(-2)+('0'+o.d).slice(-2); }
+function rpFmtDate(dt){ return (dt.getUTCMonth()+1)+'/'+dt.getUTCDate()+'('+RP_WD[dt.getUTCDay()]+')'; }
+function rpParseDateCell(txt){
+  txt=String(txt||'').trim(); var t=rpToday();
+  if(/今日|きょう|ほんじつ|本日/.test(txt)) return new Date(Date.UTC(t.y,t.m-1,t.d));
+  var full=txt.match(/(\d{4})\s*[\/\-年]\s*(\d{1,2})\s*[\/\-月]\s*(\d{1,2})/);
+  if(full){ var yy=+full[1],mm2=+full[2],dd2=+full[3]; if(mm2>=1&&mm2<=12&&dd2>=1&&dd2<=31) return new Date(Date.UTC(yy,mm2-1,dd2)); }
+  var m=txt.match(/(\d{1,2})\s*[\/／月]\s*(\d{1,2})/);
+  if(m){ var mo=parseInt(m[1],10), da=parseInt(m[2],10); if(mo>=1&&mo<=12&&da>=1&&da<=31) return new Date(Date.UTC(t.y,mo-1,da)); }
+  return null;
+}
+// 空欄列の1列目(c===2)に日付を入れて離れると、その行の右の空欄列に連続日付を自動で入れる
+function rpHeaderBlur(r,c,el){
+  if(!RP.headers[r]) RP.headers[r]=[];
+  RP.headers[r][c]=el.textContent;
+  if(c<RP_FIXED) return; // No./氏名/学年 は日付化しない
+  var base=rpParseDateCell(el.textContent);
+  if(base){ RP.headers[r][c]=rpFmtDate(base); rpRender(); } // 日付を入れたら個別にM/D(曜)へ整形
+}
+// カレンダー(各セルの📅)から日付を個別入力。空(削除)ならそのセルを空にする
+function rpHeaderPickDate(r,c,val){
+  if(!RP.headers[r]) RP.headers[r]=[];
+  if(!val){ RP.headers[r][c]=''; rpRender(); return; } // カレンダーの「削除」でセルを空に
+  var d=rpParseDateCell(val); if(!d) return;
+  RP.headers[r][c]=rpFmtDate(d);
+  rpRender();
+}
+function rpDateToIso(d){ return d.getUTCFullYear()+'-'+('0'+(d.getUTCMonth()+1)).slice(-2)+'-'+('0'+d.getUTCDate()).slice(-2); }
+function rpOpenCellCal(btn){
+  var th=btn.parentNode;
+  var inp=th.querySelector('.rp-hdate'); var span=th.querySelector('.rp-hspan');
+  if(!inp) return;
+  var cur=span?rpParseDateCell(span.textContent):null;
+  inp.value = cur ? rpDateToIso(cur) : ''; // 現在の日付をカレンダーに反映→「削除」で消せる
+  try{ inp.showPicker(); }catch(e){ inp.focus(); inp.click(); }
+}
+// 「今日から日付」ボタン：見出し1行目の空欄列を今日から連番で埋める
+function rpFillDatesSeq(){
+  var el=document.getElementById('rpSeqStart');
+  var v=el?el.value:''; var base=v?rpParseDateCell(v):null;
+  if(!base){ var t=rpToday(); base=new Date(Date.UTC(t.y,t.m-1,t.d)); }
+  var n=rpTotalCols();
+  if(!RP.headers[0]) RP.headers[0]=[];
+  for(var i=RP_FIXED;i<n;i++){ var d=new Date(base.getTime()+(i-RP_FIXED)*86400000); RP.headers[0][i]=rpFmtDate(d); }
+  rpRender();
+}
+
+// ---- 初期化 ----
+function rpEnsureInit(){
+  rpInjectStyles();
+  if(!RP._inited){ rpBuildControls(); RP._inited=true; }
+  else { var s=document.getElementById('rpSearch'); if(s)s.value=RP.search; rpUpdateFilterChips(); }
+  rpRender();
+}
+window.addEventListener('resize', function(){ if(document.getElementById('rpPreview')) rpScalePreview(); });
+
+
 
 function renderStats(){ openGradeCount(); switchStatsTab('inquiry'); }
 
