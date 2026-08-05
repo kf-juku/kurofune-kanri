@@ -10349,7 +10349,7 @@ function rpBuildControls(){
     +'<span id="rpMergeTools" style="'+(RP.mergeMode?'display:inline-flex':'display:none')+';align-items:center;gap:8px;">'
       +'<button class="rp-act" onclick="rpDoMerge()">結合</button>'
       +'<button class="rp-act gray" onclick="rpDoUnmerge()">解除</button>'
-      +'<span style="font-size:11px;color:#6b7280;">見出し・空欄の同じ行で、始点→終点をクリックして範囲選択→「結合」。もう一度選んで「解除」で戻せます（No.・氏名・学年は対象外）。</span>'
+      +'<span style="font-size:11px;color:#6b7280;">見出しは行ごと、本文（空欄）は列ごとに、始点→終点をクリックで範囲選択→「結合」。本文の結合は全生徒・全ページで同じ列に反映されます。「解除」で戻せます（No.・氏名・学年は対象外）。</span>'
     +'</span>'
   +'</div>'
   // アクション
@@ -10477,7 +10477,7 @@ function rpTableHtml(rows, editable){
       tbody+='<td class="rp-no">'+noCell+'</td><td class="rp-name">'+rpEsc(m.name)+'</td><td class="rp-grade">'+rpEsc(m.grade)+'</td>';
       var bc=RP_FIXED;
       while(bc<nCols){
-        var bmg=rpMergeStartingAt(RP.bmerge, (function(id){return function(x){return x.id===id;};})(m.id), bc);
+        var bmg=rpMergeStartingAt(RP.bmerge, function(){return true;}, bc); // 本文は全行共通の列レンジ
         var bc1=bmg?bmg.c1:bc;
         var bspan=(bc1>bc)?(' colspan="'+(bc1-bc+1)+'"'):'';
         if(mm){
@@ -10503,10 +10503,15 @@ function rpClampMerges(){
     if(m.c1>n-1) m.c1=n-1;
     return m.c0>=RP_FIXED && m.c1>m.c0;
   });
-  RP.bmerge=(RP.bmerge||[]).filter(function(m){
+  // 本文結合は「全行共通の列レンジ」。範囲外をクランプ→重なり除去（旧・生徒単位データもここで列レンジへ吸収）
+  var bm=(RP.bmerge||[]).filter(function(m){
     if(m.c1>n-1) m.c1=n-1;
-    return m.c0>=RP_FIXED && m.c1>m.c0;
+    return typeof m.c0==='number' && m.c0>=RP_FIXED && m.c1>m.c0;
   });
+  bm.sort(function(a,b){ return a.c0-b.c0; });
+  var out=[], last=RP_FIXED-1;
+  bm.forEach(function(m){ if(m.c0>last){ out.push({c0:m.c0,c1:m.c1}); last=m.c1; } });
+  RP.bmerge=out;
 }
 function rpMergeStartingAt(list,match,c){
   list=list||[];
@@ -10515,7 +10520,7 @@ function rpMergeStartingAt(list,match,c){
 }
 function rpCellKeyOf(el){
   var t=el.getAttribute('data-mtype');
-  return t==='h' ? ('h:'+el.getAttribute('data-r')) : ('b:'+el.getAttribute('data-id'));
+  return t==='h' ? ('h:'+el.getAttribute('data-r')) : 'b'; // 本文は列単位（全行共通）なのでキーは'b'固定
 }
 function rpCellClick(ev,el){
   if(ev){ ev.preventDefault(); ev.stopPropagation(); }
@@ -10547,14 +10552,14 @@ function rpSelParts(){
   var isH=key.charAt(0)==='h'; var ref=key.slice(2);
   var list=isH?RP.hmerge:RP.bmerge;
   var match=isH ? (function(rr){return function(m){return m.r===rr;};})(+ref)
-               : (function(id){return function(m){return m.id===id;};})(ref);
+               : function(m){ return true; }; // 本文は全行共通の列レンジ
   return {isH:isH, ref:ref, list:list, match:match};
 }
 function rpDoMerge(){
   var sp=rpSelParts();
   if(!sp || RP._selC1<=RP._selC0){ showToast('同じ行のセルを2つ以上選んでください',true); return; }
   for(var i=sp.list.length-1;i>=0;i--){ if(sp.match(sp.list[i]) && sp.list[i].c0<=RP._selC1 && sp.list[i].c1>=RP._selC0) sp.list.splice(i,1); }
-  sp.list.push(sp.isH ? {r:+sp.ref,c0:RP._selC0,c1:RP._selC1} : {id:sp.ref,c0:RP._selC0,c1:RP._selC1});
+  sp.list.push(sp.isH ? {r:+sp.ref,c0:RP._selC0,c1:RP._selC1} : {c0:RP._selC0,c1:RP._selC1});
   RP._selKey=null; rpRender(); showToast('結合しました');
 }
 function rpDoUnmerge(){
@@ -10670,7 +10675,24 @@ function rpScalePreview(){
 }
 
 // ---- 見出し・タイトル編集 ----
-function rpHeaderEdit(r,c,el){ if(!RP.headers[r]) RP.headers[r]=[]; RP.headers[r][c]=el.textContent; }
+function rpHeaderEdit(r,c,el){ if(!RP.headers[r]) RP.headers[r]=[]; RP.headers[r][c]=el.textContent; rpSyncHeadersAcrossPages(el); }
+// 入力中の見出しを、今カーソルがあるセル以外の全ページの同じセルへ即時反映（再描画せずカーソルを飛ばさない）
+function rpSyncHeadersAcrossPages(activeEl){
+  var host=document.getElementById('rpPreview'); if(!host) return;
+  host.querySelectorAll('thead .rp-hspan').forEach(function(sp){
+    if(sp===activeEl) return;
+    var m=(sp.getAttribute('oninput')||'').match(/rpHeaderEdit\((\d+),(\d+),/);
+    if(!m) return; var v=(RP.headers[+m[1]]||[])[+m[2]]||'';
+    if(sp.textContent!==v) sp.textContent=v;
+  });
+  host.querySelectorAll('thead th[oninput]').forEach(function(th){
+    if(th===activeEl) return;
+    var m=(th.getAttribute('oninput')||'').match(/rpHeaderEdit\((\d+),(\d+),/);
+    if(!m) return; var c=+m[2]; var def=(c===0?'No.':c===1?'氏名':c===2?'学年':'');
+    var v=(RP.headers[+m[1]]||[])[c]||def;
+    if(th.textContent!==v) th.textContent=v;
+  });
+}
 function rpTitleEdit(el){ RP.title=el.textContent; syncTitleAcrossPages(); }
 function syncTitleAcrossPages(){ /* 入力中は他ページに反映しない（カーソル飛び防止） */ }
 
