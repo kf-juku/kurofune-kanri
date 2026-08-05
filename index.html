@@ -10216,7 +10216,8 @@ var RP = {
   paper:'portrait', title:'生徒リスト',
   headers:[['No.','氏名','学年','','','','','','','']], // 先頭2列は名前/学年、以降は空欄列の見出し（複数行可）
   _inited:false, _loadedId:'',
-  hmerge:[], bmerge:[], mergeMode:false, _selKey:null, _selC0:null, _selC1:null // セル結合（見出し/空欄の横結合）
+  hmerge:[], bmerge:[], mergeMode:false, _selKey:null, _selC0:null, _selC1:null, // セル結合（見出し/空欄の横結合）
+  _navBound:false // 見出しセルのTAB/Enter移動を一度だけbind
 };
 var _rpFilter = { status:['在籍'], attr:['juku'], classroom:[], grade:['中1','中2','中3'] }; // 既定=塾・中1〜3・在籍（会員一覧と同じ方式）
 var RP_WD = ['日','月','火','水','木','金','土'];
@@ -10274,6 +10275,7 @@ function rpInjectStyles(){
   +'.rp-mergemode .rp-table .rp-mcell{cursor:pointer;}'
   +'.rp-mergemode .rp-table .rp-mcell:hover{background:#eff6ff !important;}'
   +'.rp-table .rp-mcell.rp-sel{outline:2px solid #2563eb;outline-offset:-2px;background:#dbeafe !important;}'
+  +'.rp-table th[contenteditable]:focus,.rp-hspan:focus{outline:2px solid #2563eb;outline-offset:-2px;background:#eff6ff;}'
   // 印刷本体（body直下）は画面では隠す
   +'#rp-print-root{display:none;}'
   +'@media print{'
@@ -10286,6 +10288,7 @@ function rpInjectStyles(){
   if(!document.getElementById('rp-print-root')){
     var pr=document.createElement('div'); pr.id='rp-print-root'; document.body.appendChild(pr);
   }
+  if(!RP._navBound){ document.addEventListener('keydown', rpGridKeydown); RP._navBound=true; }
 }
 
 function rpBuildControls(){
@@ -10325,7 +10328,7 @@ function rpBuildControls(){
     +'<span style="width:10px;"></span>'
     +'<label style="font-size:11px;color:#6b7280;display:inline-flex;align-items:center;gap:4px;">開始日 <input type="date" id="rpSeqStart" style="font-size:12px;border:1.5px solid var(--border);border-radius:6px;padding:4px 6px;font-family:inherit;"></label>'
     +'<button class="rp-act gray" style="padding:6px 12px;" onclick="rpFillDatesSeq()">📅 この日から連番</button>'
-    +'<span style="font-size:11px;color:#9ca3af;">※各見出しセルは直接入力、または📅でカレンダー個別指定。まとめて入れるときは開始日を選んで「この日から連番」</span>'
+    +'<span style="font-size:11px;color:#9ca3af;">※各見出しセルは直接入力、または📅でカレンダー個別指定。まとめて入れるときは開始日を選んで「この日から連番」。セル入力中はTAB=右／Enter=下（Shift併用で逆方向）で移動</span>'
   +'</div>'
   +'<div class="rp-row">'
     +'<span class="rp-lbl">並び順</span>'
@@ -10429,9 +10432,9 @@ function rpTableHtml(rows, editable){
         thead+='<th rowspan="'+R+'" style="width:24mm;">'+rpEsc(RP.headers[0][1]||'氏名')+'</th>';
         thead+='<th rowspan="'+R+'" style="width:14mm;">'+rpEsc(RP.headers[0][2]||'学年')+'</th>';
       } else if(editable){
-        thead+='<th rowspan="'+R+'" contenteditable="true" oninput="rpHeaderEdit(0,0,this)" style="width:9mm;">'+rpEsc(RP.headers[0][0]||'No.')+'</th>';
-        thead+='<th rowspan="'+R+'" contenteditable="true" oninput="rpHeaderEdit(0,1,this)" style="width:24mm;">'+rpEsc(RP.headers[0][1]||'氏名')+'</th>';
-        thead+='<th rowspan="'+R+'" contenteditable="true" oninput="rpHeaderEdit(0,2,this)" style="width:14mm;">'+rpEsc(RP.headers[0][2]||'学年')+'</th>';
+        thead+='<th class="rp-navcell" rowspan="'+R+'" contenteditable="true" oninput="rpHeaderEdit(0,0,this)" style="width:9mm;">'+rpEsc(RP.headers[0][0]||'No.')+'</th>';
+        thead+='<th class="rp-navcell" rowspan="'+R+'" contenteditable="true" oninput="rpHeaderEdit(0,1,this)" style="width:24mm;">'+rpEsc(RP.headers[0][1]||'氏名')+'</th>';
+        thead+='<th class="rp-navcell" rowspan="'+R+'" contenteditable="true" oninput="rpHeaderEdit(0,2,this)" style="width:14mm;">'+rpEsc(RP.headers[0][2]||'学年')+'</th>';
       } else {
         thead+='<th rowspan="'+R+'" style="width:9mm;">'+rpEsc(RP.headers[0][0]||'No.')+'</th>';
         thead+='<th rowspan="'+R+'" style="width:24mm;">'+rpEsc(RP.headers[0][1]||'氏名')+'</th>';
@@ -10447,7 +10450,7 @@ function rpTableHtml(rows, editable){
       if(mm){
         thead+='<th class="rp-mcell" data-mtype="h" data-r="'+r+'" data-c0="'+c+'" data-c1="'+c1+'"'+span+' onclick="rpCellClick(event,this)">'+val+'</th>';
       } else if(editable){
-        thead+='<th class="rp-hcell"'+span+'>'
+        thead+='<th class="rp-hcell rp-navcell"'+span+'>'
           +'<span class="rp-hspan" contenteditable="true" oninput="rpHeaderEdit('+r+','+c+',this)" onblur="rpHeaderBlur('+r+','+c+',this)">'+val+'</span>'
           +'<input type="date" class="rp-hdate" onchange="rpHeaderPickDate('+r+','+c+',this.value)">'
           +'<button type="button" class="rp-hcal" title="カレンダーで日付を選ぶ" onclick="rpOpenCellCal(this)">📅</button>'
@@ -10815,6 +10818,52 @@ function rpDelHistory(id,title){
   if(!confirm('「'+title+'」を履歴から削除しますか？')) return;
   var url=getGasUrl(); var fd=new FormData(); fd.append('action','deletePrintRoster'); fd.append('id',id);
   smPostJson(url,fd,3).then(function(d){ if(d&&d.success){ if(RP._loadedId===id)RP._loadedId=''; showToast('削除しました'); rpOpenHistory(); } else showToast('削除に失敗しました',true); }).catch(function(){ showToast('削除に失敗しました',true); });
+}
+
+// ---- 見出しセルのキーボード移動（TAB=右／Enter=下・Excel風） ----
+function rpGridKeydown(e){
+  if(e.key!=='Tab' && e.key!=='Enter' && e.key!=='Escape') return;
+  var ce=document.activeElement; if(!ce||!ce.closest) return;
+  var prev=document.getElementById('rpPreview'); if(!prev||!prev.contains(ce)) return;
+  var cell=ce.closest('.rp-navcell'); if(!cell) return;
+  if(e.key==='Escape'){ e.preventDefault(); ce.blur(); return; }
+  e.preventDefault();
+  if(e.key==='Tab') rpNav(cell, e.shiftKey?'left':'right');
+  else rpNav(cell, e.shiftKey?'up':'down');
+}
+function rpNav(cell, dir){
+  var prev=document.getElementById('rpPreview'); if(!prev) return;
+  var cells=[].slice.call(prev.querySelectorAll('.rp-navcell'));
+  if(cells.length<2) return;
+  var cr=cell.getBoundingClientRect();
+  var cx=(cr.left+cr.right)/2, cy=(cr.top+cr.bottom)/2;
+  var best=null, bestScore=0;
+  function consider(el, score){ if(best===null||score<bestScore){ best=el; bestScore=score; } }
+  cells.forEach(function(el){
+    if(el===cell) return;
+    var r=el.getBoundingClientRect();
+    var vOverlap=!(r.bottom<=cr.top+2 || r.top>=cr.bottom-2);
+    var hOverlap=!(r.right<=cr.left+2 || r.left>=cr.right-2);
+    if(dir==='right'){ if(vOverlap && r.left>=cr.right-2) consider(el, r.left*100000 + Math.abs((r.top+r.bottom)/2-cy)); }
+    else if(dir==='left'){ if(vOverlap && r.right<=cr.left+2) consider(el, (-r.left)*100000 + Math.abs((r.top+r.bottom)/2-cy)); }
+    else if(dir==='down'){ if(hOverlap && r.top>=cr.bottom-2) consider(el, r.top*100000 + Math.abs((r.left+r.right)/2-cx)); }
+    else if(dir==='up'){ if(hOverlap && r.bottom<=cr.top+2) consider(el, (-r.top)*100000 + Math.abs((r.left+r.right)/2-cx)); }
+  });
+  // 行末TABは次の行の先頭へ折り返し（左端）。行頭Shift+TABは前の行の末尾へ
+  if(!best && dir==='right'){
+    cells.forEach(function(el){ if(el===cell)return; var r=el.getBoundingClientRect(); if(r.top<cr.bottom-2)return; consider(el, r.top*100000 + r.left); });
+  }
+  if(!best && dir==='left'){
+    cells.forEach(function(el){ if(el===cell)return; var r=el.getBoundingClientRect(); if(r.bottom>cr.top+2)return; consider(el, (-r.top)*100000 - r.left); });
+  }
+  if(best) rpFocusCell(best);
+}
+function rpFocusCell(cell){
+  var t = cell.isContentEditable ? cell : cell.querySelector('.rp-hspan');
+  if(!t) return;
+  t.focus();
+  try{ var sel=window.getSelection(), rg=document.createRange(); rg.selectNodeContents(t); sel.removeAllRanges(); sel.addRange(rg); }catch(e){}
+  if(t.scrollIntoView) t.scrollIntoView({block:'nearest',inline:'nearest'});
 }
 
 // ---- 日付ヘルパー（JST） ----
