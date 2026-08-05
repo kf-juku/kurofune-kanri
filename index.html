@@ -10693,8 +10693,15 @@ function rpSyncHeadersAcrossPages(activeEl){
     if(th.textContent!==v) th.textContent=v;
   });
 }
-function rpTitleEdit(el){ RP.title=el.textContent; syncTitleAcrossPages(); }
-function syncTitleAcrossPages(){ /* 入力中は他ページに反映しない（カーソル飛び防止） */ }
+function rpTitleEdit(el){ RP.title=el.textContent; syncTitleAcrossPages(el); }
+// タイトルは全ページ共通。入力中、今カーソルがあるタイトル以外の全ページの.rp-titleへ即時反映（再描画せずカーソルを飛ばさない）
+function syncTitleAcrossPages(activeEl){
+  var host=document.getElementById('rpPreview'); if(!host) return;
+  host.querySelectorAll('.rp-title').forEach(function(t){
+    if(t===activeEl) return;
+    if(t.textContent!==RP.title) t.textContent=RP.title;
+  });
+}
 
 // ---- コントロール操作 ----
 function rpToggleFilter(btn){
