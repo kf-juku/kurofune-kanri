@@ -10215,7 +10215,8 @@ var RP = {
   split:false, sortDir:'asc', blankCols:7,
   paper:'portrait', title:'生徒リスト',
   headers:[['No.','氏名','学年','','','','','','','']], // 先頭2列は名前/学年、以降は空欄列の見出し（複数行可）
-  _inited:false, _loadedId:''
+  _inited:false, _loadedId:'',
+  hmerge:[], bmerge:[], mergeMode:false, _selKey:null, _selC0:null, _selC1:null // セル結合（見出し/空欄の横結合）
 };
 var _rpFilter = { status:['在籍'], attr:['juku'], classroom:[], grade:['中1','中2','中3'] }; // 既定=塾・中1〜3・在籍（会員一覧と同じ方式）
 var RP_WD = ['日','月','火','水','木','金','土'];
@@ -10270,6 +10271,9 @@ function rpInjectStyles(){
   +'.rp-table td.rp-exc input{cursor:pointer;position:absolute;top:0;bottom:0;left:0;right:0;margin:auto;width:13px;height:13px;}'
   +'.rp-table tbody tr.rp-excluded td{color:#c0392b;text-decoration:line-through;opacity:.55;}'
   +'.rp-table tbody tr.rp-excluded td.rp-exc{text-decoration:none;opacity:1;}'
+  +'.rp-mergemode .rp-table .rp-mcell{cursor:pointer;}'
+  +'.rp-mergemode .rp-table .rp-mcell:hover{background:#eff6ff !important;}'
+  +'.rp-table .rp-mcell.rp-sel{outline:2px solid #2563eb;outline-offset:-2px;background:#dbeafe !important;}'
   // 印刷本体（body直下）は画面では隠す
   +'#rp-print-root{display:none;}'
   +'@media print{'
@@ -10335,6 +10339,16 @@ function rpBuildControls(){
       +'<button class="'+(RP.paper==='landscape'?'active':'')+'" onclick="rpSetPaper(\'landscape\')">A4 横</button>'
     +'</div>'
   +'</div>'
+  // セル結合
+  +'<div class="rp-row" id="rpMergeRow" style="border-top:1px dashed #e5e7eb;padding-top:10px;">'
+    +'<span class="rp-lbl">セル結合</span>'
+    +'<button class="rp-act '+(RP.mergeMode?'':'gray')+'" id="rpMergeToggle" onclick="rpToggleMergeMode()">'+(RP.mergeMode?'✓ 結合モード中（やめる）':'🔗 セルを結合する')+'</button>'
+    +'<span id="rpMergeTools" style="'+(RP.mergeMode?'display:inline-flex':'display:none')+';align-items:center;gap:8px;">'
+      +'<button class="rp-act" onclick="rpDoMerge()">結合</button>'
+      +'<button class="rp-act gray" onclick="rpDoUnmerge()">解除</button>'
+      +'<span style="font-size:11px;color:#6b7280;">見出し・空欄の同じ行で、始点→終点をクリックして範囲選択→「結合」。もう一度選んで「解除」で戻せます（No.・氏名・学年は対象外）。</span>'
+    +'</span>'
+  +'</div>'
   // アクション
   +'<div class="rp-row" style="border-top:1px dashed #e5e7eb;padding-top:10px;">'
     +'<button class="rp-act" onclick="rpPrint()">🖨️ 印刷</button>'
@@ -10398,27 +10412,50 @@ function rpTotalCols(){ return RP_FIXED+RP.blankCols; }
 
 function rpTableHtml(rows, editable){
   var nCols=rpTotalCols(), R=RP.headers.length;
-  var ce=editable?' contenteditable="true"':'';
+  var mm = editable && RP.mergeMode; // 結合モード中は編集UIでなく選択UIを出す
+  // 列幅を固定（table-layout:fixed＋colspanでも崩れないようにcolgroupで明示）
+  var cg='<colgroup>';
+  if(editable) cg+='<col style="width:8mm;">';
+  cg+='<col style="width:9mm;"><col style="width:24mm;"><col style="width:14mm;">';
+  for(var cc=RP_FIXED;cc<nCols;cc++) cg+='<col>';
+  cg+='</colgroup>';
   var thead='<thead>';
   for(var r=0;r<R;r++){
     thead+='<tr>';
     if(r===0){
       if(editable) thead+='<th class="rp-exc" rowspan="'+R+'" title="チェックで印刷から除外">除外</th>';
-      thead+='<th rowspan="'+R+'"'+ce+' oninput="rpHeaderEdit(0,0,this)" style="width:9mm;">'+rpEsc(RP.headers[0][0]||'No.')+'</th>';
-      thead+='<th rowspan="'+R+'"'+ce+' oninput="rpHeaderEdit(0,1,this)" style="width:24mm;">'+rpEsc(RP.headers[0][1]||'氏名')+'</th>';
-      thead+='<th rowspan="'+R+'"'+ce+' oninput="rpHeaderEdit(0,2,this)" style="width:14mm;">'+rpEsc(RP.headers[0][2]||'学年')+'</th>';
+      if(mm){
+        thead+='<th rowspan="'+R+'" style="width:9mm;">'+rpEsc(RP.headers[0][0]||'No.')+'</th>';
+        thead+='<th rowspan="'+R+'" style="width:24mm;">'+rpEsc(RP.headers[0][1]||'氏名')+'</th>';
+        thead+='<th rowspan="'+R+'" style="width:14mm;">'+rpEsc(RP.headers[0][2]||'学年')+'</th>';
+      } else if(editable){
+        thead+='<th rowspan="'+R+'" contenteditable="true" oninput="rpHeaderEdit(0,0,this)" style="width:9mm;">'+rpEsc(RP.headers[0][0]||'No.')+'</th>';
+        thead+='<th rowspan="'+R+'" contenteditable="true" oninput="rpHeaderEdit(0,1,this)" style="width:24mm;">'+rpEsc(RP.headers[0][1]||'氏名')+'</th>';
+        thead+='<th rowspan="'+R+'" contenteditable="true" oninput="rpHeaderEdit(0,2,this)" style="width:14mm;">'+rpEsc(RP.headers[0][2]||'学年')+'</th>';
+      } else {
+        thead+='<th rowspan="'+R+'" style="width:9mm;">'+rpEsc(RP.headers[0][0]||'No.')+'</th>';
+        thead+='<th rowspan="'+R+'" style="width:24mm;">'+rpEsc(RP.headers[0][1]||'氏名')+'</th>';
+        thead+='<th rowspan="'+R+'" style="width:14mm;">'+rpEsc(RP.headers[0][2]||'学年')+'</th>';
+      }
     }
-    for(var c=RP_FIXED;c<nCols;c++){
+    var c=RP_FIXED;
+    while(c<nCols){
+      var mg=rpMergeStartingAt(RP.hmerge, (function(rr){return function(x){return x.r===rr;};})(r), c);
+      var c1=mg?mg.c1:c;
+      var span=(c1>c)?(' colspan="'+(c1-c+1)+'"'):'';
       var val=rpEsc((RP.headers[r]||[])[c]||'');
-      if(editable){
-        thead+='<th class="rp-hcell">'
+      if(mm){
+        thead+='<th class="rp-mcell" data-mtype="h" data-r="'+r+'" data-c0="'+c+'" data-c1="'+c1+'"'+span+' onclick="rpCellClick(event,this)">'+val+'</th>';
+      } else if(editable){
+        thead+='<th class="rp-hcell"'+span+'>'
           +'<span class="rp-hspan" contenteditable="true" oninput="rpHeaderEdit('+r+','+c+',this)" onblur="rpHeaderBlur('+r+','+c+',this)">'+val+'</span>'
           +'<input type="date" class="rp-hdate" onchange="rpHeaderPickDate('+r+','+c+',this.value)">'
           +'<button type="button" class="rp-hcal" title="カレンダーで日付を選ぶ" onclick="rpOpenCellCal(this)">📅</button>'
           +'</th>';
       } else {
-        thead+='<th>'+val+'</th>';
+        thead+='<th'+span+'>'+val+'</th>';
       }
+      c=c1+1;
     }
     thead+='</tr>';
   }
@@ -10435,14 +10472,96 @@ function rpTableHtml(rows, editable){
       tbody+='<tr'+(ex?' class="rp-excluded"':'')+'>';
       if(editable) tbody+='<td class="rp-exc"><input type="checkbox" '+(ex?'checked':'')+' onchange="rpToggleExclude(\''+m.id+'\')" title="チェックで印刷から除外"></td>';
       tbody+='<td class="rp-no">'+noCell+'</td><td class="rp-name">'+rpEsc(m.name)+'</td><td class="rp-grade">'+rpEsc(m.grade)+'</td>';
-      for(var c=RP_FIXED;c<nCols;c++) tbody+='<td></td>';
+      var bc=RP_FIXED;
+      while(bc<nCols){
+        var bmg=rpMergeStartingAt(RP.bmerge, (function(id){return function(x){return x.id===id;};})(m.id), bc);
+        var bc1=bmg?bmg.c1:bc;
+        var bspan=(bc1>bc)?(' colspan="'+(bc1-bc+1)+'"'):'';
+        if(mm){
+          tbody+='<td class="rp-mcell" data-mtype="b" data-id="'+rpEsc(m.id)+'" data-c0="'+bc+'" data-c1="'+bc1+'"'+bspan+' onclick="rpCellClick(event,this)"></td>';
+        } else {
+          tbody+='<td'+bspan+'></td>';
+        }
+        bc=bc1+1;
+      }
       tbody+='</tr>';
     });
   }
   tbody+='</tbody>';
-  return '<table class="rp-table">'+thead+tbody+'</table>';
+  return '<table class="rp-table">'+cg+thead+tbody+'</table>';
 }
 function rpToggleExclude(id){ if(RP.exclude[id]) delete RP.exclude[id]; else RP.exclude[id]=true; rpRender(); }
+
+// ---- セル結合（見出し・空欄の横結合／No.・氏名・学年は対象外） ----
+function rpClampMerges(){
+  var n=rpTotalCols();
+  RP.hmerge=(RP.hmerge||[]).filter(function(m){
+    if(!(m.r>=0 && m.r<RP.headers.length)) return false;
+    if(m.c1>n-1) m.c1=n-1;
+    return m.c0>=RP_FIXED && m.c1>m.c0;
+  });
+  RP.bmerge=(RP.bmerge||[]).filter(function(m){
+    if(m.c1>n-1) m.c1=n-1;
+    return m.c0>=RP_FIXED && m.c1>m.c0;
+  });
+}
+function rpMergeStartingAt(list,match,c){
+  list=list||[];
+  for(var i=0;i<list.length;i++){ if(match(list[i]) && list[i].c0===c) return list[i]; }
+  return null;
+}
+function rpCellKeyOf(el){
+  var t=el.getAttribute('data-mtype');
+  return t==='h' ? ('h:'+el.getAttribute('data-r')) : ('b:'+el.getAttribute('data-id'));
+}
+function rpCellClick(ev,el){
+  if(ev){ ev.preventDefault(); ev.stopPropagation(); }
+  var key=rpCellKeyOf(el);
+  var c0=+el.getAttribute('data-c0'), c1=+el.getAttribute('data-c1');
+  if(RP._selKey!==key){ RP._selKey=key; RP._selC0=c0; RP._selC1=c1; }
+  else { RP._selC0=Math.min(RP._selC0,c0); RP._selC1=Math.max(RP._selC1,c1); }
+  rpPaintSelection();
+}
+function rpPaintSelection(){
+  var host=document.getElementById('rpPreview'); if(!host) return;
+  host.querySelectorAll('.rp-mcell.rp-sel').forEach(function(c){ c.classList.remove('rp-sel'); });
+  if(RP._selKey==null) return;
+  host.querySelectorAll('.rp-mcell').forEach(function(c){
+    if(rpCellKeyOf(c)!==RP._selKey) return;
+    var a=+c.getAttribute('data-c0'), b=+c.getAttribute('data-c1');
+    if(a<=RP._selC1 && b>=RP._selC0) c.classList.add('rp-sel');
+  });
+}
+function rpToggleMergeMode(){
+  RP.mergeMode=!RP.mergeMode; RP._selKey=null;
+  var tg=document.getElementById('rpMergeToggle'), tl=document.getElementById('rpMergeTools');
+  if(tg){ tg.textContent=RP.mergeMode?'✓ 結合モード中（やめる）':'🔗 セルを結合する'; tg.classList.toggle('gray',!RP.mergeMode); }
+  if(tl){ tl.style.display=RP.mergeMode?'inline-flex':'none'; }
+  rpRender();
+}
+function rpSelParts(){
+  var key=RP._selKey; if(key==null) return null;
+  var isH=key.charAt(0)==='h'; var ref=key.slice(2);
+  var list=isH?RP.hmerge:RP.bmerge;
+  var match=isH ? (function(rr){return function(m){return m.r===rr;};})(+ref)
+               : (function(id){return function(m){return m.id===id;};})(ref);
+  return {isH:isH, ref:ref, list:list, match:match};
+}
+function rpDoMerge(){
+  var sp=rpSelParts();
+  if(!sp || RP._selC1<=RP._selC0){ showToast('同じ行のセルを2つ以上選んでください',true); return; }
+  for(var i=sp.list.length-1;i>=0;i--){ if(sp.match(sp.list[i]) && sp.list[i].c0<=RP._selC1 && sp.list[i].c1>=RP._selC0) sp.list.splice(i,1); }
+  sp.list.push(sp.isH ? {r:+sp.ref,c0:RP._selC0,c1:RP._selC1} : {id:sp.ref,c0:RP._selC0,c1:RP._selC1});
+  RP._selKey=null; rpRender(); showToast('結合しました');
+}
+function rpDoUnmerge(){
+  var sp=rpSelParts();
+  if(!sp){ showToast('解除するセルを選んでください',true); return; }
+  var before=sp.list.length;
+  for(var i=sp.list.length-1;i>=0;i--){ if(sp.match(sp.list[i]) && sp.list[i].c0<=RP._selC1 && sp.list[i].c1>=RP._selC0) sp.list.splice(i,1); }
+  if(sp.list.length===before){ showToast('選択位置に結合はありません',true); return; }
+  RP._selKey=null; rpRender(); showToast('結合を解除しました');
+}
 
 function rpPageHtml(group, editable, idx){
   var sub = RP.split ? (group.label + (group.label==='北久里浜'?'（表）':group.label==='久里浜'?'（裏）':'')) : '全体';
@@ -10457,6 +10576,7 @@ function rpPageHtml(group, editable, idx){
 // ---- 描画（プレビュー） ----
 function rpRender(){
   if(!document.getElementById('rpPreview')) return;
+  rpClampMerges();
   var list=rpFilterStudents();
   var cntEl=document.getElementById('rpCount'); if(cntEl) cntEl.textContent=list.length+'人';
   var groups=rpPageGroups(list);
@@ -10465,6 +10585,8 @@ function rpRender(){
   // 各ページを1枚に収める自動縮小
   var pages=host.querySelectorAll('.rp-page');
   for(var i=0;i<pages.length;i++) rpFitPage(pages[i]);
+  host.classList.toggle('rp-mergemode', !!RP.mergeMode);
+  rpPaintSelection();
   rpScalePreview();
 }
 
@@ -10597,6 +10719,7 @@ function rpResetConfig(){
   _rpFilter={status:['在籍'],attr:['juku'],classroom:[],grade:['中1','中2','中3']};
   RP.exclude={};
   RP.search='';RP.split=false;RP.sortDir='asc';RP.blankCols=7;RP.paper='portrait';RP.title='生徒リスト';RP.headers=[['No.','氏名','学年','','','','','','','']];RP._loadedId='';
+  RP.hmerge=[];RP.bmerge=[];RP.mergeMode=false;RP._selKey=null;
   rpBuildControls(); rpRender();
 }
 
@@ -10627,7 +10750,8 @@ function rpSetPageRule(){
 // ---- 履歴（GAS共有） ----
 function rpConfig(){
   return {title:RP.title,filter:JSON.parse(JSON.stringify(_rpFilter)),search:RP.search,exclude:Object.keys(RP.exclude),
-    split:RP.split,sortDir:RP.sortDir,blankCols:RP.blankCols,paper:RP.paper,headers:JSON.parse(JSON.stringify(RP.headers))};
+    split:RP.split,sortDir:RP.sortDir,blankCols:RP.blankCols,paper:RP.paper,headers:JSON.parse(JSON.stringify(RP.headers)),
+    hmerge:JSON.parse(JSON.stringify(RP.hmerge||[])),bmerge:JSON.parse(JSON.stringify(RP.bmerge||[]))};
 }
 function rpApplyConfig(c){
   if(!c) return;
@@ -10638,7 +10762,10 @@ function rpApplyConfig(c){
   RP.blankCols=(typeof c.blankCols==='number')?c.blankCols:7; RP.paper=c.paper||'portrait';
   RP.headers=(Array.isArray(c.headers)&&c.headers.length)?c.headers:[['No.','氏名','学年','','','','','','','']];
   RP.exclude={}; (Array.isArray(c.exclude)?c.exclude:[]).forEach(function(id){ RP.exclude[id]=true; });
-  rpNormalizeHeaders(); rpBuildControls(); rpAfterControl();
+  RP.hmerge=Array.isArray(c.hmerge)?JSON.parse(JSON.stringify(c.hmerge)):[];
+  RP.bmerge=Array.isArray(c.bmerge)?JSON.parse(JSON.stringify(c.bmerge)):[];
+  RP.mergeMode=false; RP._selKey=null;
+  rpNormalizeHeaders(); rpClampMerges(); rpBuildControls(); rpAfterControl();
 }
 function rpGenId(){ return 'rp_'+Date.now()+'_'+Math.random().toString(36).slice(2,8); }
 function rpSaveHistory(){
