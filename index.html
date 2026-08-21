@@ -4397,11 +4397,14 @@ function bulkDeleteTasks(){
   if(!keys.length) return;
   if(!confirm(keys.length + ' 件のタスクを削除します。よろしいですか？')) return;
   var _affected={};
+  var _iqDeletedTaskIds=[];   // 2026-08-21 差分保存：GASから個別に消すidの控え
   keys.forEach(function(key){
     var parts = key.split(':');
     var type = parts[0];
     var id   = parts.slice(1).join(':');
     if(type === 'iq'){
+      // 2026-08-21 差分保存：消したidを控えて、GASからも1件ずつ消す（全件上書きしない）
+      if((_iqTasks||[]).some(function(t){ return t.id === id; })) _iqDeletedTaskIds.push(id);
       _iqTasks = (_iqTasks||[]).filter(function(t){ return t.id !== id; });
     } else if(type === 'interview'){
       var p = id.split('/'); var mid = p[0], rid = p[1];
@@ -4414,6 +4417,7 @@ function bulkDeleteTasks(){
     }
   });
   saveIqTasks();
+  _iqDeletedTaskIds.forEach(function(tid){ deleteOneIqTaskFromGas(tid); });
   var _changedM=Object.keys(_affected).map(function(id){ return _members.find(function(x){ return x.id===id; }); }).filter(Boolean);
   saveToCache(); if(_changedM.length) updateManyStudentsToGas(_changedM);
   _bulkSelectedTasks = {};
@@ -4567,11 +4571,11 @@ function renderTasks(){
 
 function completeIqTask(taskId){
   var r=(_iqTasks||[]).filter(function(t){ return t.id===taskId; })[0];
-  if(r){ r.taskDone=true; saveIqTasks(); syncIqTaskStatusToGas(r); renderTasks(); showToast('タスクを完了しました'); }
+  if(r){ r.taskDone=true; saveIqTasks(); saveOneIqTaskToGas(r); syncIqTaskStatusToGas(r); renderTasks(); showToast('タスクを完了しました'); }
 }
 function uncompleteIqTask(taskId){
   var r=(_iqTasks||[]).filter(function(t){ return t.id===taskId; })[0];
-  if(r){ r.taskDone=false; saveIqTasks(); syncIqTaskStatusToGas(r); renderTasks(); showToast('未完了に戻しました'); }
+  if(r){ r.taskDone=false; saveIqTasks(); saveOneIqTaskToGas(r); syncIqTaskStatusToGas(r); renderTasks(); showToast('未完了に戻しました'); }
 }
 function deleteIqTask(taskId){
   if(!confirm('このタスクを削除しますか？')) return;
@@ -4579,7 +4583,8 @@ function deleteIqTask(taskId){
   if(idx===-1) return;
   _iqTasks.splice(idx, 1);
   saveIqTasks();
-  deleteIqTaskFromGas(taskId);
+  deleteOneIqTaskFromGas(taskId);   // 会員管理GAS「問い合わせタスク」シートから1行削除
+  deleteIqTaskFromGas(taskId);      // タスクマネージャーGAS（別サーバー）にも削除通知
   renderTasks();
   showToast('タスクを削除しました');
 }
@@ -7381,49 +7386,255 @@ var _inquiries = [];
 var KEY_IQ_TASKS = 'sm_iq_tasks';
 var _iqTasks = [];  // 問い合わせ起点の未紐付けタスク
 function loadIqTasks(){ try{ _iqTasks = JSON.parse(localStorage.getItem(KEY_IQ_TASKS)||'[]'); }catch(e){ _iqTasks=[]; } }
+// 2026-08-21 全件上書き撤廃：この関数はローカルキャッシュ専用に戻した。
+// GASへは saveOneIqTaskToGas / deleteOneIqTaskFromGas（差分）で個別に送る。
+// 生徒データの saveToCache() と saveOneStudentToGas() の関係と同じ。
 function saveIqTasks(){
   try{ localStorage.setItem(KEY_IQ_TASKS, JSON.stringify(_iqTasks)); }catch(e){}
-  // GASにも保存（問い合わせデータと一緒に送信）
-  var url = getGasUrl();
-  if(url){
-    var fd = new FormData();
-    fd.append('action', 'updateInquiries');
-    fd.append('inquiries', JSON.stringify(_inquiries));
-    fd.append('iqTasks', JSON.stringify(_iqTasks || []));
-    window._iqSaving = true;
-    fetch(url, {method:'POST', body:fd})
-      .then(function(r){ return r.json(); })
-      .then(function(data){
-        window._lastGasSync = Date.now(); window._iqSaving = false;
-        if(!data || !data.success) console.warn('[GAS] IQ保存応答エラー:', data);
-      })
-      .catch(function(e){ window._iqSaving = false; console.warn('[GAS] IQ保存失敗:', e); });
-  }
 }
 var _inquiryFilter = { classroom:[] };
 var _editInquiryId = null;
 var _enrollInquiryId = null;
 
+// 2026-08-21 全件上書き撤廃：関数名どおりローカルキャッシュ専用に戻した。
+// GASへは saveOneInquiryToGas / deleteOneInquiryFromGas（差分）で個別に送る。
 function saveInquiriesToCache(){
   try{ localStorage.setItem('sm_inquiries', JSON.stringify(_inquiries)); }catch(e){}
-  // GASにも保存（複数スタッフ共有のため）
-  var url = getGasUrl();
-  if(url){
-    var fd = new FormData();
-    fd.append('action', 'updateInquiries');
-    fd.append('inquiries', JSON.stringify(_inquiries));
-    fd.append('iqTasks', JSON.stringify(_iqTasks || []));
-    // 保存中フラグON → 完了後にリセット（GAS古いデータ取得による上書き防止）
-    window._iqSaving = true;
-    fetch(url, {method:'POST', body:fd})
-      .then(function(){ window._lastGasSync = Date.now(); window._iqSaving = false; })
-      .catch(function(e){ window._iqSaving = false; console.warn('[GAS] IQ保存失敗:', e); });
-  }
 }
 function loadInquiriesFromCache(){
   // localStorageからfallback読み込み（起動直後の仮データ）
   try{ return JSON.parse(localStorage.getItem('sm_inquiries')||'[]'); }catch(e){ return []; }
 }
+
+// =====================================================
+// 問い合わせ／問い合わせタスク 差分保存（2026-08-21）
+// 2026-07-08に生徒データでやった全件上書き撤廃の問い合わせ版。
+// 送るのは「1件upsert」「複数差分upsert」「1件削除」の3種だけ。全件送信はしない。
+// 【重要】旧action(updateInquiries)へのフォールバックは絶対にしない。
+//   GASが未更新なら赤モーダルで失敗を見せる。黙って全件上書きに戻す方が桁違いに危険。
+// 【注意】既存の deleteIqTaskFromGas / syncIqTaskStatusToGas は「タスクマネージャーGAS」
+//   (getTaskGasUrl) 宛の別物。ここの関数(getGasUrl 宛)と混同しないこと。
+// =====================================================
+
+// 保存中フラグはカウンタで持つ（小さい保存が同時に何本も飛ぶため、
+// 単純なbooleanだと1本の完了で他の在飛行中を無視して取得が走ってしまう）
+function _iqSaveBegin(){ window._iqSavingCount = (window._iqSavingCount||0) + 1; window._iqSaving = true; }
+function _iqSaveEnd(){
+  window._iqSavingCount = Math.max((window._iqSavingCount||1) - 1, 0);
+  window._iqSaving = window._iqSavingCount > 0;
+}
+
+// GASが新actionに未対応（＝再デプロイ忘れ）かどうかの判定。
+// GASは末尾で {success:false, error:'不明なアクション: xxx'} を返す。これを拾う。
+function _iqIsUnknownAction(data){
+  return !!(data && data.success === false && /不明なアクション/.test(String(data.error||'')));
+}
+var _iqGasStaleShown = false;
+function _iqShowGasStale(action){
+  if(_iqGasStaleShown) return;   // 打鍵ごとに出さない
+  _iqGasStaleShown = true;
+  var ov=document.createElement('div');
+  ov.className='overlay show'; ov.style.zIndex='10001';
+  var box=document.createElement('div');
+  box.className='modal';
+  box.style.cssText='width:min(92vw,480px);border:2px solid #dc2626;';
+  box.innerHTML='<div class="modal-head" style="background:#fef2f2;"><span class="modal-head-title" style="color:#b91c1c;">\u26a0\ufe0f GASが古いため保存できません</span></div>'
+    +'<div class="modal-body">'
+    +'<div style="font-size:13px;color:#7f1d1d;margin-bottom:8px;">サーバー(GAS)がまだ差分保存に対応していません（未対応アクション：'+esc(action)+'）。<br><b>問い合わせの変更はサーバーに保存されていません。</b></div>'
+    +'<div style="background:#fff7ed;border:1px solid #fdba74;border-radius:6px;padding:8px 10px;font-size:12px;color:#9a3412;margin-bottom:12px;">'
+    +'\u30fb入力内容はこのブラウザには残っています（消えていません）。<br>'
+    +'\u30fbGASを「新しいバージョン」で再デプロイしてから、このページを再読み込みしてください。<br>'
+    +'\u30fb再デプロイまでは、他の端末と食い違ったままになります。</div>'
+    +'<div style="display:flex;gap:8px;justify-content:flex-end;">'
+    +'<button id="_iqStaleClose" style="border:none;background:#dc2626;color:#fff;border-radius:8px;padding:8px 14px;cursor:pointer;font-size:13px;font-weight:700;">閉じる</button>'
+    +'</div></div>';
+  ov.appendChild(box); document.body.appendChild(ov);
+  box.querySelector('#_iqStaleClose').addEventListener('click', function(){ ov.remove(); _iqGasStaleShown=false; });
+}
+
+// 問い合わせ 1件upsert
+function saveOneInquiryToGas(iq, opts){
+  var url=getGasUrl();
+  if(!url || !iq) return Promise.resolve();
+  if(!iq.id){ console.warn('[GAS] idの無い問い合わせは保存しません:', iq); showToast('この問い合わせにidがありません（保存できません）', true); return Promise.resolve(); }
+  var fd=new FormData();
+  fd.append('action','upsertInquiry');
+  fd.append('inquiry',JSON.stringify(iq));
+  _iqSaveBegin();
+  return smPostJson(url, fd, 3)
+    .then(function(data){
+      _iqSaveEnd();
+      if(_iqIsUnknownAction(data)){ _iqShowGasStale('upsertInquiry'); return; }
+      if(!data || !data.success){ showToast('問い合わせのGAS保存に失敗しました（'+(data&&data.error||'不明')+'）', true); return; }
+      if(!(opts&&opts.skipVerify)) verifyInquirySaved(iq);
+    })
+    .catch(function(e){ _iqSaveEnd(); console.warn('[GAS] 問い合わせ1件保存失敗:', e); showToast('問い合わせのGAS保存に失敗しました', true); });
+}
+
+// 問い合わせ 複数差分upsert（変更した対象だけ渡すこと。全件を渡してはいけない）
+function saveManyInquiriesToGas(list, opts){
+  var url=getGasUrl();
+  if(!url || !list || !list.length) return Promise.resolve();
+  var payload=list.filter(function(x){ return x && x.id; });
+  if(!payload.length) return Promise.resolve();
+  var fd=new FormData();
+  fd.append('action','upsertInquiries');
+  fd.append('inquiries',JSON.stringify(payload));
+  _iqSaveBegin();
+  return smPostJson(url, fd, 3)
+    .then(function(data){
+      _iqSaveEnd();
+      if(_iqIsUnknownAction(data)){ _iqShowGasStale('upsertInquiries'); return; }
+      if(!data || !data.success){ showToast('問い合わせのGAS保存に失敗しました（'+(data&&data.error||'不明')+'）', true); return; }
+      if(!(opts&&opts.skipVerify)) payload.forEach(function(x){ verifyInquirySaved(x); });
+    })
+    .catch(function(e){ _iqSaveEnd(); console.warn('[GAS] 問い合わせ複数保存失敗:', e); showToast('問い合わせのGAS保存に失敗しました', true); });
+}
+
+// 問い合わせ 1件削除
+function deleteOneInquiryFromGas(id, name){
+  var url=getGasUrl();
+  if(!url || !id) return Promise.resolve();
+  var fd=new FormData();
+  fd.append('action','deleteInquiry');
+  fd.append('id',id);
+  _iqSaveBegin();
+  return smPostJson(url, fd, 3)
+    .then(function(data){
+      _iqSaveEnd();
+      if(_iqIsUnknownAction(data)){ _iqShowGasStale('deleteInquiry'); return; }
+      if(!data || !data.success){ showToast('問い合わせのGAS削除に失敗しました（'+(data&&data.error||'不明')+'）', true); return; }
+      verifyInquiryDeleted(id, name);
+    })
+    .catch(function(e){ _iqSaveEnd(); console.warn('[GAS] 問い合わせ削除失敗:', e); showToast('問い合わせのGAS削除に失敗しました', true); });
+}
+
+// 問い合わせタスク 1件upsert（会員管理GAS「問い合わせタスク」シート宛）
+function saveOneIqTaskToGas(task){
+  var url=getGasUrl();
+  if(!url || !task) return Promise.resolve();
+  if(!task.id){ console.warn('[GAS] idの無いタスクは保存しません:', task); return Promise.resolve(); }
+  var fd=new FormData();
+  fd.append('action','upsertIqTask');
+  fd.append('task',JSON.stringify(task));
+  _iqSaveBegin();
+  return smPostJson(url, fd, 3)
+    .then(function(data){
+      _iqSaveEnd();
+      if(_iqIsUnknownAction(data)){ _iqShowGasStale('upsertIqTask'); return; }
+      if(!data || !data.success){ showToast('問い合わせタスクのGAS保存に失敗しました（'+(data&&data.error||'不明')+'）', true); }
+    })
+    .catch(function(e){ _iqSaveEnd(); console.warn('[GAS] IQタスク保存失敗:', e); showToast('問い合わせタスクのGAS保存に失敗しました', true); });
+}
+
+// 問い合わせタスク 複数差分upsert
+function saveManyIqTasksToGas(list){
+  var url=getGasUrl();
+  if(!url || !list || !list.length) return Promise.resolve();
+  var payload=list.filter(function(x){ return x && x.id; });
+  if(!payload.length) return Promise.resolve();
+  var fd=new FormData();
+  fd.append('action','upsertIqTasks');
+  fd.append('tasks',JSON.stringify(payload));
+  _iqSaveBegin();
+  return smPostJson(url, fd, 3)
+    .then(function(data){
+      _iqSaveEnd();
+      if(_iqIsUnknownAction(data)){ _iqShowGasStale('upsertIqTasks'); return; }
+      if(!data || !data.success){ showToast('問い合わせタスクのGAS保存に失敗しました（'+(data&&data.error||'不明')+'）', true); }
+    })
+    .catch(function(e){ _iqSaveEnd(); console.warn('[GAS] IQタスク複数保存失敗:', e); showToast('問い合わせタスクのGAS保存に失敗しました', true); });
+}
+
+// 問い合わせタスク 1件削除（会員管理GAS宛。タスクマネージャーGAS宛の deleteIqTaskFromGas とは別物）
+function deleteOneIqTaskFromGas(id){
+  var url=getGasUrl();
+  if(!url || !id) return Promise.resolve();
+  var fd=new FormData();
+  fd.append('action','deleteIqTask');
+  fd.append('id',id);
+  _iqSaveBegin();
+  return smPostJson(url, fd, 3)
+    .then(function(data){
+      _iqSaveEnd();
+      if(_iqIsUnknownAction(data)){ _iqShowGasStale('deleteIqTask'); return; }
+      if(!data || !data.success){ showToast('問い合わせタスクのGAS削除に失敗しました（'+(data&&data.error||'不明')+'）', true); }
+    })
+    .catch(function(e){ _iqSaveEnd(); console.warn('[GAS] IQタスク削除失敗:', e); showToast('問い合わせタスクのGAS削除に失敗しました', true); });
+}
+
+// =====================================================
+// 保存後のサーバー照合（2026-08-21）：verifyMemberSaved と同じ考え方。
+// ただし問い合わせは1打鍵300msごとに保存が飛ぶので、id単位で1.2秒デバウンスして
+// 「打ち終わった1回」だけ照合する。ズレを検知しても0.8秒おいてもう1回だけ確認し、
+// 2回連続でズレたときだけ警告する（2026-07-14の空振りループ対策と同じ）。
+// =====================================================
+var _iqVerifyTimers = {};
+function _inquirySaveDiff(iq, sv){
+  var diff=[];
+  if(!sv){ diff.push('サーバーにこの問い合わせが見つかりません'); return diff; }
+  var chk=function(label,a,b){ if(String(a||'')!==String(b||'')) diff.push(label+'（この画面:'+(a||'空')+' ／ サーバー:'+(b||'空')+'）'); };
+  chk('氏名', iq.name, sv.name);
+  chk('教室', iq.classroom, sv.classroom);
+  chk('ステータス', iq.status, sv.status);
+  chk('会員登録済フラグ', iq.enrolledToMember?'済':'未', sv.enrolledToMember?'済':'未');
+  var js=function(v){ return JSON.stringify(v||{}); };
+  if(js(iq.steps)!==js(sv.steps)) diff.push('進捗ステップ（来訪・入会確約）が一致しません');
+  if(JSON.stringify(iq.trials||[])!==JSON.stringify(sv.trials||[])) diff.push('体験の予定が一致しません');
+  return diff;
+}
+function _fetchInquirySaveDiff(iq){
+  var url=getGasUrl();
+  return smFetchJson(url+'?action=getOneInquiry&id='+encodeURIComponent(iq.id)+'&_t='+Date.now(), 3)
+    .then(function(data){
+      if(_iqIsUnknownAction(data)) return [];    // GAS未更新は保存側が既に警告済み。ここでは二重に出さない
+      return _inquirySaveDiff(iq, data && data.found && data.inquiry);
+    });
+}
+function verifyInquirySaved(iq){
+  var url=getGasUrl();
+  if(!url || !iq || !iq.id) return;
+  clearTimeout(_iqVerifyTimers[iq.id]);
+  _iqVerifyTimers[iq.id] = setTimeout(function(){
+    delete _iqVerifyTimers[iq.id];
+    var recheck=function(){ return new Promise(function(res){ setTimeout(res,800); }).then(function(){ return _fetchInquirySaveDiff(iq); }); };
+    _fetchInquirySaveDiff(iq).then(function(d1){
+      if(!d1.length) return;
+      return recheck().then(function(d2){ if(d2.length) showInquirySaveWarning(iq, d2); });
+    }).catch(function(){
+      recheck().then(function(d2){ if(d2.length) showInquirySaveWarning(iq, d2); })
+               .catch(function(){ showInquirySaveWarning(iq, ['サーバー確認の通信に失敗しました']); });
+    });
+  }, 1200);
+}
+function verifyInquiryDeleted(id, name){
+  var url=getGasUrl(); if(!url || !id) return;
+  smFetchJson(url+'?action=getOneInquiry&id='+encodeURIComponent(id)+'&_t='+Date.now(), 3).then(function(data){
+    if(data && data.found) showToast('\u26a0\ufe0f '+(name||'問い合わせ')+' の削除がサーバーに反映されていない可能性があります', true);
+  }).catch(function(){});
+}
+function showInquirySaveWarning(iq, reasons){
+  var ov=document.createElement('div');
+  ov.className='overlay show'; ov.style.zIndex='10001';
+  var box=document.createElement('div');
+  box.className='modal';
+  box.style.cssText='width:min(92vw,460px);border:2px solid #dc2626;';
+  box.innerHTML='<div class="modal-head" style="background:#fef2f2;"><span class="modal-head-title" style="color:#b91c1c;">\u26a0\ufe0f 問い合わせがサーバーに反映されていません</span></div>'
+    +'<div class="modal-body">'
+    +'<div style="font-size:13px;color:#7f1d1d;margin-bottom:8px;">'+esc(iq.name||'この問い合わせ')+' の内容が、スプレッドシート（サーバー）と食い違っています。他の端末では古い状態が見えている可能性があります。</div>'
+    +'<div style="background:#fff7ed;border:1px solid #fdba74;border-radius:6px;padding:8px 10px;font-size:12px;color:#9a3412;margin-bottom:12px;">'+reasons.map(function(x){ return '\u30fb'+esc(x); }).join('<br>')+'</div>'
+    +'<div style="display:flex;gap:8px;justify-content:flex-end;">'
+    +'<button id="_iswClose" style="border:1px solid #cbd5e1;background:#fff;border-radius:8px;padding:8px 14px;cursor:pointer;font-size:13px;color:#334155;">閉じる</button>'
+    +'<button id="_iswResave" style="border:none;background:#dc2626;color:#fff;border-radius:8px;padding:8px 14px;cursor:pointer;font-size:13px;font-weight:700;">サーバーに再保存</button>'
+    +'</div></div>';
+  ov.appendChild(box); document.body.appendChild(ov);
+  box.querySelector('#_iswClose').addEventListener('click', function(){ ov.remove(); });
+  box.querySelector('#_iswResave').addEventListener('click', function(){
+    var b=box.querySelector('#_iswResave'); b.disabled=true; b.textContent='再保存中...';
+    saveOneInquiryToGas(iq, {skipVerify:true}).then(function(){ ov.remove(); });
+  });
+}
+
 // 問い合わせカードを編集中か（カード内フォーカス中 or 300msデバウンス保存の待機中）
 function isIqEditing(){
   var ae = document.activeElement;
@@ -7761,6 +7972,7 @@ function removeIqTrialBlock(id, idx){
   if(iq && iq.trials && iq.trials[idx] !== undefined){
     iq.trials.splice(idx, 1);
     saveInquiriesToCache();
+    saveOneInquiryToGas(iq);
     // 番号振り直しのため再描画
     renderInquiry();
   }
@@ -8215,7 +8427,11 @@ function _removeAutoTasksByTrigger(m, trg){
   });
   if(removed.length){
     try{ saveIqTasks(); }catch(e){}
-    removed.forEach(function(t){ if(typeof deleteIqTaskFromGas==='function' && t.id) deleteIqTaskFromGas(t.id); });
+    removed.forEach(function(t){
+      if(!t || !t.id) return;
+      deleteOneIqTaskFromGas(t.id);                                                   // 会員管理GAS（差分削除）
+      if(typeof deleteIqTaskFromGas==='function') deleteIqTaskFromGas(t.id);          // タスクマネージャーGAS
+    });
   }
 }
 function unlockConfirm(course, kind){
@@ -8419,6 +8635,7 @@ function saveIqInterview(){
   if(!iq.interviewMemos) iq.interviewMemos = [];
   iq.interviewMemos.push({ id: genId(), date: date, memo: memo });
   saveInquiriesToCache();
+  saveOneInquiryToGas(iq);
   closeIqInterviewModal();
   showToast('面談メモを保存しました');
   renderInquiry();
@@ -8954,7 +9171,7 @@ function fireIqTaskTrigger(trigger, apoDtStr, apoTimeStr, classroom, studentName
         var hh=apoDt.getHours(), mm=apoDt.getMinutes();
         return dateToStr(apoDt)+'T'+(hh<10?'0':'')+hh+':'+(mm<10?'0':'')+mm;
       })() : '';
-      _iqTasks.push({
+      var _newIqTask = {
         id: newIqId,
         date: today,
         studentName: studentName || '',
@@ -8969,8 +9186,10 @@ function fireIqTaskTrigger(trigger, apoDtStr, apoTimeStr, classroom, studentName
         trigger: trigger,
         offsetKey: String(tmpl.offsetDays),
         tmplTitle: resolvedTitle
-      });
+      };
+      _iqTasks.push(_newIqTask);
       saveIqTasks();
+      saveOneIqTaskToGas(_newIqTask);   // 2026-08-21 差分保存：生成した1件だけ送る
     }
     renderTasks();
     showToast('📋 タスク生成: ' + title);
@@ -9285,6 +9504,7 @@ function saveIqCard(id, skipRender){
     iq._prevTrials = JSON.parse(JSON.stringify(iq.trials));
   }
   saveInquiriesToCache();
+  saveOneInquiryToGas(iq);   // 2026-08-21 差分保存：編集した1件だけ送る（照合は1.2秒デバウンス）
   if(!skipRender) renderInquiry();
   if(steps.enroll.done && !wasEnrolled){
     iq.enrolledToMember = false;
@@ -9295,8 +9515,10 @@ function saveIqCard(id, skipRender){
 
 function deleteInquiry(id){
   if(!confirm('この問い合わせを削除しますか？')) return;
+  var _delName = (_inquiries.find(function(x){ return x.id===id; })||{}).name || '';
   _inquiries = _inquiries.filter(function(x){ return x.id!==id; });
   saveInquiriesToCache();
+  deleteOneInquiryFromGas(id, _delName);   // 2026-08-21 差分削除：その行だけ消す
   renderInquiry();
   showToast('削除しました');
 }
@@ -9359,6 +9581,7 @@ function openInquiryAddModal(){
   };
   _inquiries.unshift(newIq);
   saveInquiriesToCache();
+  saveOneInquiryToGas(newIq, {skipVerify:true});   // 空カードなので照合は不要（すぐ打鍵保存が走る）
   renderInquiry();
   // 展開して名前フィールドにフォーカス
   setTimeout(function(){
@@ -9647,6 +9870,7 @@ function confirmEnrollMergeProceed(iq){
   saveToCache(); saveOneStudentToGas(m); // 検知策B/案1(2026-07-08)：保存直後にサーバー照合（saveOneStudentToGas内蔵）
   iq.enrolledToMember = true;
   saveInquiriesToCache();
+  saveOneInquiryToGas(iq);
   // タスク発火は統合前に持っていなかったコースのみ（川上さん決定 2026-07-06）
   var _enrollCls = m.classroom || '';
   var _enrollName2 = m.name || '';
@@ -9680,6 +9904,7 @@ function closeEnrollPopup(){
     var blockEl = document.getElementById('iqstep3_'+iq.id);
     if(blockEl){ blockEl.classList.remove('done','active'); }
     saveInquiriesToCache();
+    saveOneInquiryToGas(iq);
     renderInquiry();
   }
   document.getElementById('enrollPopupOverlay').classList.remove('show');
@@ -9735,6 +9960,7 @@ function enrollLater(){
   saveToCache(); saveOneStudentToGas(m);
   iq.enrolledToMember = true;
   saveInquiriesToCache();
+  saveOneInquiryToGas(iq);
   document.getElementById('enrollPopupOverlay').classList.remove('show');
   _enrollInquiryId = null;
   showToast(iq.name+' を在籍登録しました（詳細は会員管理から入力してください）');
@@ -9846,6 +10072,7 @@ function confirmEnrollProceed(){
   // 問い合わせ側に登録済みフラグ
   iq.enrolledToMember = true;
   saveInquiriesToCache();
+  saveOneInquiryToGas(iq);
   // 入会確約タスクをここで発火（×キャンセル時には発火しない）
   var _enrollCls  = m.classroom || '';
   var _enrollName = m.name || '';
