@@ -4760,7 +4760,20 @@ function smFetchJson(url, tries){
 function smPostJson(url, fd, tries){
   tries = tries || 3;
   return fetch(url,{method:'POST',body:fd}).then(function(r){ return r.text(); }).then(function(t){
-    try{ return JSON.parse(t); }
+    try{
+      var parsed = JSON.parse(t);
+      // 2026-08-21：ロック待ちタイムアウトだけは再送する。
+      //   GASの withLock_ は HTTP 200 で {success:false, error:'locked: 他のスタッフが…'} を返すため、
+      //   JSONとしては正常＝従来のリトライ条件（非JSON・通信例外）に引っかからず1回で諦めていた。
+      //   保存系actionはIDで上書きする冪等な作りなので、再送しても二重登録にならない。
+      if(parsed && parsed.success === false && tries > 1){
+        var em = String(parsed.error || '');
+        if(em.indexOf('locked') !== -1 || em.indexOf('同時に保存中') !== -1){
+          return new Promise(function(res){ setTimeout(res, 800); }).then(function(){ return smPostJson(url, fd, tries-1); });
+        }
+      }
+      return parsed;
+    }
     catch(e){
       if(tries>1){ return new Promise(function(res){ setTimeout(res, 800); }).then(function(){ return smPostJson(url, fd, tries-1); }); }
       throw new Error('サーバー応答が不正（保存・数回やり直しても失敗）');
@@ -7509,6 +7522,26 @@ function deleteOneInquiryFromGas(id, name){
     .catch(function(e){ _iqSaveEnd(); console.warn('[GAS] 問い合わせ削除失敗:', e); showToast('問い合わせのGAS削除に失敗しました', true); });
 }
 
+// =====================================================
+// 問い合わせタスクの再送キュー（2026-08-21）
+// 【なぜ】改修前は打鍵のたびに _iqTasks 全件が再送されていたので、1回の送信失敗は
+//   次の保存で勝手に埋まっていた。1件送信に変えたぶん、落ちたら落ちたきりになる。
+//   タスクはローカルにしか無い状態になり、次の取得で _iqTasks が丸ごと差し替わって消える。
+// 【対策】失敗したタスクをキューに積み、次のタスク操作・取得のタイミングでまとめて再送する。
+//   さらに取得で _iqTasks を差し替えるとき、未送信ぶんは画面から消さずに残す。
+// =====================================================
+var _iqTaskRetryQueue = {};
+function _iqTaskRetryPush(t){ if(t && t.id) _iqTaskRetryQueue[t.id] = t; }
+function _iqTaskRetryPushMany(list){ (list||[]).forEach(_iqTaskRetryPush); }
+function _iqTaskRetryFlush(){
+  var ids = Object.keys(_iqTaskRetryQueue);
+  if(!ids.length) return Promise.resolve();
+  var list = ids.map(function(k){ return _iqTaskRetryQueue[k]; });
+  _iqTaskRetryQueue = {};                       // 失敗したらヘルパー側でまた積まれる
+  console.warn('[GAS] 未送信の問い合わせタスク ' + list.length + '件を再送します');
+  return saveManyIqTasksToGas(list);
+}
+
 // 問い合わせタスク 1件upsert（会員管理GAS「問い合わせタスク」シート宛）
 function saveOneIqTaskToGas(task){
   var url=getGasUrl();
@@ -7522,9 +7555,9 @@ function saveOneIqTaskToGas(task){
     .then(function(data){
       _iqSaveEnd();
       if(_iqIsUnknownAction(data)){ _iqShowGasStale('upsertIqTask'); return; }
-      if(!data || !data.success){ showToast('問い合わせタスクのGAS保存に失敗しました（'+(data&&data.error||'不明')+'）', true); }
+      if(!data || !data.success){ _iqTaskRetryPush(task); showToast('問い合わせタスクのGAS保存に失敗しました（'+(data&&data.error||'不明')+'）。次の操作でもう一度送ります', true); }
     })
-    .catch(function(e){ _iqSaveEnd(); console.warn('[GAS] IQタスク保存失敗:', e); showToast('問い合わせタスクのGAS保存に失敗しました', true); });
+    .catch(function(e){ _iqSaveEnd(); _iqTaskRetryPush(task); console.warn('[GAS] IQタスク保存失敗:', e); showToast('問い合わせタスクのGAS保存に失敗しました。次の操作でもう一度送ります', true); });
 }
 
 // 問い合わせタスク 複数差分upsert
@@ -7541,9 +7574,9 @@ function saveManyIqTasksToGas(list){
     .then(function(data){
       _iqSaveEnd();
       if(_iqIsUnknownAction(data)){ _iqShowGasStale('upsertIqTasks'); return; }
-      if(!data || !data.success){ showToast('問い合わせタスクのGAS保存に失敗しました（'+(data&&data.error||'不明')+'）', true); }
+      if(!data || !data.success){ _iqTaskRetryPushMany(payload); showToast('問い合わせタスクのGAS保存に失敗しました（'+(data&&data.error||'不明')+'）。次の操作でもう一度送ります', true); }
     })
-    .catch(function(e){ _iqSaveEnd(); console.warn('[GAS] IQタスク複数保存失敗:', e); showToast('問い合わせタスクのGAS保存に失敗しました', true); });
+    .catch(function(e){ _iqSaveEnd(); _iqTaskRetryPushMany(payload); console.warn('[GAS] IQタスク複数保存失敗:', e); showToast('問い合わせタスクのGAS保存に失敗しました。次の操作でもう一度送ります', true); });
 }
 
 // 問い合わせタスク 1件削除（会員管理GAS宛。タスクマネージャーGAS宛の deleteIqTaskFromGas とは別物）
@@ -7597,6 +7630,10 @@ function verifyInquirySaved(iq){
   clearTimeout(_iqVerifyTimers[iq.id]);
   _iqVerifyTimers[iq.id] = setTimeout(function(){
     delete _iqVerifyTimers[iq.id];
+    // 2026-08-21：タイマー発火までに削除されていたら照合しない（削除と入れ違いの保存対策）。
+    //   ここが無いと、削除済みレコードに対して「サーバーに無い」の警告が出て、
+    //   再保存でサーバーに復活させてしまう。
+    if(!_inquiries.some(function(x){ return x && x.id === iq.id; })) return;
     var recheck=function(){ return new Promise(function(res){ setTimeout(res,800); }).then(function(){ return _fetchInquirySaveDiff(iq); }); };
     _fetchInquirySaveDiff(iq).then(function(d1){
       if(!d1.length) return;
@@ -7631,7 +7668,10 @@ function showInquirySaveWarning(iq, reasons){
   box.querySelector('#_iswClose').addEventListener('click', function(){ ov.remove(); });
   box.querySelector('#_iswResave').addEventListener('click', function(){
     var b=box.querySelector('#_iswResave'); b.disabled=true; b.textContent='再保存中...';
-    saveOneInquiryToGas(iq, {skipVerify:true}).then(function(){ ov.remove(); });
+    // 2026-08-21：skipVerify を外す。付けたままだと再保存が失敗してもモーダルが必ず閉じ、
+    //   「直った」と誤解させる（会員側の showMemberSaveWarning は再照合している）。
+    //   1.2秒デバウンス＋0.8秒の2回確認があるので、2026-07-14型の空振りループにはならない。
+    saveOneInquiryToGas(iq).then(function(){ ov.remove(); });
   });
 }
 
@@ -7661,6 +7701,11 @@ function loadInquiriesFromGas(callback){
         // IqTasksも受信して反映
         if(data.iqTasks && Array.isArray(data.iqTasks)){
           _iqTasks = data.iqTasks;
+          // 2026-08-21：まだサーバーに送れていないタスクは、取得結果で画面から消さない。
+          Object.keys(_iqTaskRetryQueue).forEach(function(k){
+            if(!_iqTasks.some(function(t){ return t && t.id === k; })) _iqTasks.push(_iqTaskRetryQueue[k]);
+          });
+          _iqTaskRetryFlush();
           try{ localStorage.setItem('sm_iq_tasks', JSON.stringify(_iqTasks)); }catch(e){}
         }
         renderInquiry();
@@ -9516,6 +9561,11 @@ function saveIqCard(id, skipRender){
 function deleteInquiry(id){
   if(!confirm('この問い合わせを削除しますか？')) return;
   var _delName = (_inquiries.find(function(x){ return x.id===id; })||{}).name || '';
+  // 2026-08-21：直前の保存が仕掛けた「サーバー照合」タイマーを必ず止める。
+  //   止めないと、削除の1.2秒後に照合が走って「サーバーに見つかりません」の赤モーダルが出る。
+  //   そこで「サーバーに再保存」を押すと、GASはidが無いので新規行として追加し、
+  //   消したはずの問い合わせがサーバーに復活して全端末に戻ってくる。
+  if(_iqVerifyTimers[id]){ clearTimeout(_iqVerifyTimers[id]); delete _iqVerifyTimers[id]; }
   _inquiries = _inquiries.filter(function(x){ return x.id!==id; });
   saveInquiriesToCache();
   deleteOneInquiryFromGas(id, _delName);   // 2026-08-21 差分削除：その行だけ消す
