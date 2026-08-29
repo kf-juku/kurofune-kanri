@@ -5685,7 +5685,7 @@ function attachKomaRadioToggle(container){
   });
 }
 
-function buildKomaTableHtml(defMap, komas, disabled, simpleMode, idPrefix){
+function buildKomaTableHtml(defMap, komas, disabled, simpleMode, idPrefix, homeCr){
   // 川上さん報告(2026-07-06)：入会確約モーダルの通塾コマ無反応バグ対策。同一IDのコマ表が詳細パネル・会員追加・入会確約の3か所に生成され、label forが最初の要素にしか効かないため、wrapごとにIDを一意化する
   var pfx = idPrefix || '';
   var dis = disabled ? ' disabled' : '';
@@ -5735,6 +5735,19 @@ function buildKomaTableHtml(defMap, komas, disabled, simpleMode, idPrefix){
             // 旧形式互換：hira（平日演習回） - 同じ教室・曜日・時刻で一致
             if(k.satType === 'hira') return false; // 平日コマは別判定
             return false;
+          });
+        }
+        // 旧形式互換：英検・受験特訓（川上さん指示 2026-08-29）
+        // 旧ID（sat_eiken / eiken_eiken_kita / sat_juken / juken_juken_kita）は def.id と一致しないため
+        // 未チェックで描画され、保存時に getKomasFromUI / getKomasFromWrap が拾わずコマが黙って消えていた。
+        // （古俣瑛人の英検が消えた原因。西内飛雄・大浦碧葉も同じ旧IDを持っていた）
+        // satType（＋教室）で拾う。保存は def.id で書き出すので、1回保存すればIDは現行形式に寄る。
+        if(!existing && (def.satType === 'eiken' || def.satType === 'juken')){
+          var _homeCr = homeCr || '北久里浜'; // classroom未設定の旧データの寄せ先。両教室で二重チェックしないための決着
+          existing = komas.find(function(k){
+            if(k.satType !== def.satType) return false;
+            if(k.classroom) return k.classroom === cls;
+            return _homeCr === cls;
           });
         }
         col += '<td style="padding:2px;">';
@@ -5804,7 +5817,7 @@ function renderKomaTable(m){
   var attrCa   = !!(m.attrCa   || (document.getElementById('dAttrCa')   && document.getElementById('dAttrCa').checked));
   // 塾セクション（土曜コマも統合済み）
   var jukuHtml = '<div class="koma-course-header' + (!attrJuku?' koma-course-header-disabled':'') + '">🏫 進学塾コマ</div>';
-  jukuHtml += buildKomaTableHtml(KOMA_DEF, komas, !attrJuku);
+  jukuHtml += buildKomaTableHtml(KOMA_DEF, komas, !attrJuku, false, '', m.classroom || ((document.getElementById('dClassroom')||{}).value) || '');
   jukuWrap.innerHTML = jukuHtml;
   attachKomaRadioToggle(jukuWrap);
   // CAセクション
@@ -9274,7 +9287,7 @@ function renderKomaForWrap(wrapId, cls, attrJuku, attrCa, komas){
   var html = '';
   if(attrJuku){
     html += '<div style="font-size:11px;font-weight:700;color:#6b7280;margin:6px 0 3px;">🏫 進学塾コマ</div>';
-    html += buildKomaTableHtml({'北久里浜': KOMA_DEF['北久里浜']||[], '久里浜': KOMA_DEF['久里浜']||[]}, komas||[], false, false, wrapId+'_');
+    html += buildKomaTableHtml({'北久里浜': KOMA_DEF['北久里浜']||[], '久里浜': KOMA_DEF['久里浜']||[]}, komas||[], false, false, wrapId+'_', cls);
   }
   if(attrCa){
     html += '<div style="font-size:11px;font-weight:700;color:#6b7280;margin:6px 0 3px;">💻 CAコマ</div>';
