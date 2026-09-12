@@ -3667,7 +3667,7 @@ function saveDetailEduRecord(){
     postTaskToManager(
       '[' + (m.name||'') + '] ' + t.content,
       '',
-      dueWith1300(t.due),
+      dueOrToday(t.due),
       '生徒対応',
       '面談_' + (m.name||''),
       t.id,
@@ -4164,7 +4164,7 @@ function saveRecord(){
         postTaskToManager(
           '[' + (m.name||'') + '] ' + content,
           '',
-          dueWith1300(newDue),
+          dueOrToday(newDue),
           '生徒対応',
           '面談_' + (m.name||''),
           newId,
@@ -7196,7 +7196,7 @@ function saveBulkRecord(memberId){
     postTaskToManager(
       '[' + (m.name||'') + '] ' + t.content,
       '',
-      dueWith1300(t.due),
+      dueOrToday(t.due),
       '生徒対応',
       '面談_' + (m.name||''),
       t.id,
@@ -8798,16 +8798,19 @@ function normalizeDueDate(d){
   return y + '-' + (m < 10 ? '0' : '') + m + '-' + (dd < 10 ? '0' : '') + dd;
 }
 
-// 川上さん指示(2026-06-26)：面談約束事の期日に時刻13:00を付与する。
-// タスクマネージャーのカレンダー連携は「日付+時刻」の両方が揃って初めて発火するため、
-// 約束事(カテゴリ=生徒対応・固定)は13:00固定で送ってカレンダーに載せる。
-// 入力欄は本日デフォルトなので空はないが、念のため空なら本日を補う。時刻つき/Date文字列はそのまま返す。
-function dueWith1300(due){
+// 川上さん指示(2026-09-12)：面談の約束事はGカレに載せない。時刻を付けない。
+// 2026-06-26 は逆に「13:00を付けてGカレに載せる」だったが、13:00に実際の予定があるわけではなく、
+// カレンダーが仮の時刻で埋まるだけだったので取りやめた。
+// タスクマネージャーのGカレ書出は「期限日＋時刻＋教室」が揃ったときだけ動くので、
+// 時刻を送らなければ載らない。カテゴリ=生徒対応・種別=授業内は従来どおりなので Class Board には出る。
+// ★期日そのものは必ず入れる。期日が無いと Class Board の条件（種別＋未完了＋期限日＋教室）も
+//   満たさなくなり、タスクがどこにも出なくなる。
+// ★'T13:00' を付ける形に戻さないこと。
+function dueOrToday(due){
   var d = (due||'').trim();
-  if(!d) d = dateToStr(new Date());        // 空なら本日を補完
-  if(/T\d{2}:\d{2}/.test(d)) return d;     // すでに時刻つきならそのまま
-  if(/^\d{4}-\d{2}-\d{2}$/.test(d)) return d + 'T13:00'; // YYYY-MM-DD → 13:00付与
-  return d;                                 // 想定外形式はそのまま
+  if(!d) d = dateToStr(new Date());              // 空なら本日を補完
+  if(d.indexOf('T') !== -1) d = d.split('T')[0]; // 時刻つきで来ても日付だけにする
+  return d;
 }
 
 // タスクマネージャーにタスクを送信（GETリクエスト・file://対応）
