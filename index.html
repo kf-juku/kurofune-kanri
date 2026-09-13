@@ -3702,7 +3702,14 @@ function saveDetailEduRecord(){
     if(_dtb){ _dtb.disabled = false; _dtb.textContent = _dtbTxt; }
     if(res && res.success){
       showToast('保存しました');
-      checkDetailIvServer();
+      // 2026-09-13：GASが savedCheck を返すなら、その場で突き合わせて終わり（往復を増やさない）。
+      //   食い違ったときだけ、中身を取りに行って2択を出す。旧GASのときは従来どおり取りに行く。
+      if(res.savedCheck){
+        if(_memberSaveDiffLite(m, res.savedCheck).length) checkDetailIvServer();
+        else dtIvStatus('ok','✓ サーバーと同じ（'+_dtHhmm()+' 確認・面談記録 '+res.savedCheck.ivCount+'件）');
+      } else {
+        checkDetailIvServer();
+      }
     } else {
       dtIvStatus('bad', '⚠ サーバーに届いていません（この端末にだけあります）<br>'
         + '<button onclick="resendDetailIvToServer()" style="margin-top:6px;border:none;background:#dc2626;color:#fff;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:12px;font-weight:700;">もう一度サーバーへ送る</button>');
@@ -5223,7 +5230,15 @@ function saveOneStudentToGas(m, opts){
       if(!data || !data.success){
         showToast('GAS保存に失敗しました（' + (data&&data.error||'不明') + '）', true);
       } else if(!(opts&&opts.skipVerify)){
-        verifyMemberSaved(m); // 案1(2026-07-08)：保存直後にサーバー照合。届いていなければ警告
+        // 案1(2026-07-08)：保存直後にサーバー照合。届いていなければ警告。
+        // 2026-09-13：GASが savedCheck（書いた行の読み直し）を返すなら、それで照合してGETを省く。
+        //   ズレていたときだけ従来の verifyMemberSaved（取り直し＋誤警告防止の2回照合）に落ちる。
+        //   savedCheck を返さない旧GASのときも従来どおり動く。
+        if(data.savedCheck){
+          if(_memberSaveDiffLite(m, data.savedCheck).length) verifyMemberSaved(m);
+        } else {
+          verifyMemberSaved(m);
+        }
       }
       return data;   // 2026-09-13：呼び出し側が成否を見て「保存しました」を出せるようにする
     })
@@ -5273,6 +5288,29 @@ function deleteOneStudentFromGas(id, name){
 
 // 検知策B(2026-07-08)：保存した生徒をサーバーから取り直し、在籍状態・コース・退会日が一致するか照合。ズレたら明確に警告。
 // この端末の m と、サーバーの1件取得(sv)を突き合わせてズレ項目の配列を返す（2026-07-14 空振りループ対策で関数分離）
+// 2026-09-13：保存の返り値に乗ってくる savedCheck（GASが書いた行をシートから読み直したもの）と突き合わせる。
+//   これが使えると、照合のための GET をもう1往復投げなくてよい（保存1回の往復が2回→1回）。
+//   【実測 2026-09-13】GASの往復は中身が空でも約1.5〜2秒。体感の本体はここ。
+//   見ているのは _memberSaveDiff と同じ項目（在籍まわり＋面談記録）。
+function _memberSaveDiffLite(m, chk){
+  var diff=[];
+  if(!chk || !chk.id){ diff.push('サーバーにこの生徒が見つかりません'); return diff; }
+  var chkf=function(label,a,b){ if(String(a||'')!==String(b||'')) diff.push(label+'（この画面:'+(a||'空')+' ／ サーバー:'+(b||'空')+'）'); };
+  chkf('在籍状態', m.status, chk.status);
+  chkf('塾在籍', m.attrJuku?'有':'無', chk.attrJuku?'有':'無');
+  chkf('CA在籍', m.attrCa?'有':'無', chk.attrCa?'有':'無');
+  chkf('塾退会日', m.jukuLeave, chk.jukuLeave);
+  chkf('CA退会日', m.caLeave, chk.caLeave);
+  var li=(m.interviews||[]).length;
+  if(li!==chk.ivCount){
+    diff.push('面談記録の件数（この画面:'+li+'件 ／ サーバー:'+chk.ivCount+'件）');
+  } else {
+    var sid={}; (chk.ivIds||[]).forEach(function(x){ if(x) sid[x]=true; });
+    var miss=(m.interviews||[]).filter(function(r){ return r&&r.id&&!sid[r.id]; });
+    if(miss.length) diff.push('面談記録 '+miss.length+'件がサーバーに見つかりません');
+  }
+  return diff;
+}
 function _memberSaveDiff(m, sv){
   var diff=[];
   if(!sv){ diff.push('サーバーにこの生徒が見つかりません'); return diff; }
