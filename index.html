@@ -1507,7 +1507,10 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
           <div style="display:flex;gap:8px;align-items:center;">
             <input class="form-input" type="date" id="dtrecdate" style="width:150px;flex-shrink:0;">
             <button class="bulk-save-btn interview-mode" id="dtSaveBtn" onclick="saveDetailEduRecord()">💾 保存</button>
+            <button id="dtIvCheckBtn" onclick="checkDetailIvServer()" title="この生徒の面談記録が、スプレッドシートに入っているか照合します" style="border:1px solid #cbd5e1;background:#fff;border-radius:8px;padding:7px 12px;cursor:pointer;font-size:13px;color:#334155;white-space:nowrap;">☁︎ サーバーと照合</button>
           </div>
+          <!-- 2026-09-13：この画面とサーバーが同じかを常に出す（川上さん指示 2026-09-07） -->
+          <div id="dtIvSync" style="margin-top:6px;font-size:12px;color:#94a3b8;"></div>
         </div>
         <div class="bulk-card-right" id="dtEduRight" style="min-width:220px;max-width:260px;">
           <div id="dthistiv"><div class="bulk-card-right-title">💬 面談の記録</div><div class="bulk-hist-empty">記録なし</div></div>
@@ -3679,17 +3682,162 @@ function saveDetailEduRecord(){
 
   _detailIsDirty = false;
   clearIvDraft('detail_'+m.id, date); // 本保存できたので下書きを消す（2026-06-24）
-  saveToCache(); saveOneStudentToGas(_members[_detailIdx]); renderTasks();
-  showToast('保存しました');
-  // フォームリセット
+  saveToCache();
+  renderTasks();
+  // フォームリセット（入力内容はもうローカルに入っている）
   document.getElementById('dtcontent_interview').value = '';
   document.getElementById('dtlabel').value = '入会前';
   var dtTaskRows = document.getElementById('dttaskrows_iv');
   if(dtTaskRows) dtTaskRows.innerHTML = buildDtTaskRow(0);
   renderDetailEduHist(m, 'interview');
+
+  // 2026-09-13：GASの書き込みが終わるまでボタンを押せなくし、終わってから「保存しました」を出す。
+  //   これまでは投げっぱなしで先にトーストが出ていたので、届いていなくても保存できたように見えた。
+  //   照合は checkDetailIvServer（面談記録そのものを突き合わせる）に任せるので skipVerify にする＝往復は増えない。
+  var _dtb = document.getElementById('dtSaveBtn');
+  var _dtbTxt = _dtb ? _dtb.textContent : '';
+  if(_dtb){ _dtb.disabled = true; _dtb.textContent = '⏳ 保存中...'; }
+  dtIvStatus('busy', '☁︎ スプレッドシートに保存しています…');
+  saveOneStudentToGas(m, {skipVerify:true}).then(function(res){
+    if(_dtb){ _dtb.disabled = false; _dtb.textContent = _dtbTxt; }
+    if(res && res.success){
+      showToast('保存しました');
+      checkDetailIvServer();
+    } else {
+      dtIvStatus('bad', '⚠ サーバーに届いていません（この端末にだけあります）<br>'
+        + '<button onclick="resendDetailIvToServer()" style="margin-top:6px;border:none;background:#dc2626;color:#fff;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:12px;font-weight:700;">もう一度サーバーへ送る</button>');
+    }
+  });
+}
+
+// =====================================================
+// 会員詳細（個別ページ）の面談記録 サーバー照合（2026-09-13 追加）
+//  川上さん指示(2026-09-07)：「保存しました」を出すだけでは足りない。
+//  いまサーバーにあるものとこの画面が同じかを常に出し、ずれていたら
+//  どちらを正にするかを人が選べるようにする（機械が勝手に倒さない）。
+//  GAS側は既存の getOneStudentInterviews をそのまま使う＝GASの貼り替えなしで動く。
+// =====================================================
+var _dtIvSyncFor = null;   // いま状態表示が指している生徒id
+
+function dtIvStatus(kind, html){
+  var el = document.getElementById('dtIvSync');
+  if(!el) return;
+  var col = {ok:'#166534', bad:'#b91c1c', warn:'#9a3412', busy:'#475569', idle:'#94a3b8'}[kind] || '#94a3b8';
+  var bg  = {ok:'#f0fdf4', bad:'#fef2f2', warn:'#fff7ed', busy:'#f8fafc', idle:'transparent'}[kind] || 'transparent';
+  var bd  = {ok:'1px solid #bbf7d0', bad:'2px solid #fecaca', warn:'1px solid #fdba74', busy:'1px solid #e2e8f0', idle:'none'}[kind] || 'none';
+  el.style.cssText = 'margin-top:6px;font-size:12px;line-height:1.7;color:'+col+';background:'+bg+';border:'+bd
+    +';border-radius:6px;padding:'+(kind==='idle'?'0':'7px 9px')+';'+(kind==='bad'?'font-weight:800;':'');
+  el.innerHTML = html || '';
+}
+function _dtHhmm(){
+  var d = new Date();
+  return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
+}
+function _dtIvLine(r){
+  var lb = r && r.label ? '<span style="background:#ede9fe;color:#6d28d9;border-radius:3px;padding:0 5px;margin-left:5px;">'+esc(r.label)+'</span>' : '';
+  var tx = String((r&&r.content)||'').replace(/\s+/g,' ').slice(0,40);
+  return '<div style="margin-top:3px;">・'+esc((r&&r.date)||'')+lb+'　'+esc(tx)+(String((r&&r.content)||'').length>40?'…':'')+(r&&r.isTask?'（約束事）':'')+'</div>';
+}
+
+function checkDetailIvServer(){
+  if(_detailIdx===null) return;
+  var m = _members[_detailIdx];
+  if(!m || !m.id) return;
+  var url = getGasUrl();
+  if(!url){ dtIvStatus('warn','GAS未接続のため照合できません（設定タブでGAS URLを入れてください）'); return; }
+  var mid = m.id;
+  _dtIvSyncFor = mid;
+  var btn = document.getElementById('dtIvCheckBtn');
+  if(btn){ btn.disabled = true; btn.textContent = '☁︎ 照合中...'; }
+  dtIvStatus('busy','☁︎ スプレッドシートと照合しています…');
+
+  smFetchJson(url+'?action=getOneStudentInterviews&id='+encodeURIComponent(mid)+'&_t='+Date.now(), 3)
+    .then(function(data){
+      if(btn){ btn.disabled = false; btn.textContent = '☁︎ サーバーと照合'; }
+      // 照合中に別の生徒へ移っていたら、その結果は捨てる（古い応答で上書きしない）
+      if(_detailIdx===null || !_members[_detailIdx] || _members[_detailIdx].id !== mid) return;
+      if(!data || !data.success){
+        dtIvStatus('bad','⚠ 照合できませんでした（'+esc(String((data&&data.error)||'不明'))+'）<br>'
+          +'<button onclick="checkDetailIvServer()" style="margin-top:6px;border:1px solid #cbd5e1;background:#fff;border-radius:6px;padding:5px 11px;cursor:pointer;font-size:12px;color:#334155;">もう一度照合する</button>');
+        return;
+      }
+      var sv  = data.interviews || [];
+      var loc = m.interviews || [];
+      var svIds={},  locIds={};
+      sv.forEach(function(r){ if(r&&r.id) svIds[r.id]=true; });
+      loc.forEach(function(r){ if(r&&r.id) locIds[r.id]=true; });
+      var onlyLocal  = loc.filter(function(r){ return r && r.id && !svIds[r.id]; });
+      var onlyServer = sv.filter(function(r){ return r && r.id && !locIds[r.id]; });
+
+      if(!onlyLocal.length && !onlyServer.length){
+        dtIvStatus('ok','✓ サーバーと同じ（'+_dtHhmm()+' 確認・面談記録 '+sv.length+'件）');
+        return;
+      }
+      var html = '⚠ この画面とスプレッドシートがずれています';
+      if(onlyLocal.length){
+        html += '<div style="margin-top:6px;">この端末にだけある：'+onlyLocal.length+'件'
+             + onlyLocal.slice(0,5).map(_dtIvLine).join('')
+             + (onlyLocal.length>5 ? '<div>・ほか '+(onlyLocal.length-5)+'件</div>' : '') + '</div>';
+      }
+      if(onlyServer.length){
+        html += '<div style="margin-top:6px;">サーバーにだけある：'+onlyServer.length+'件'
+             + onlyServer.slice(0,5).map(_dtIvLine).join('')
+             + (onlyServer.length>5 ? '<div>・ほか '+(onlyServer.length-5)+'件</div>' : '') + '</div>';
+      }
+      // どちらを残すかは人が決める（機械が勝手に倒さない）
+      html += '<div style="display:flex;gap:8px;margin-top:9px;flex-wrap:wrap;">'
+        + '<button onclick="resendDetailIvToServer()" style="border:none;background:#dc2626;color:#fff;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:12px;font-weight:700;">この端末を正にする（サーバーへ送る）</button>'
+        + '<button onclick="pullDetailIvFromServer()" style="border:1px solid #cbd5e1;background:#fff;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:12px;color:#334155;">サーバーを正にする（この端末に取り込む）</button>'
+        + '</div>';
+      window._dtIvServerSnapshot = { id: mid, interviews: sv };
+      dtIvStatus('bad', html);
+    })
+    .catch(function(){
+      if(btn){ btn.disabled = false; btn.textContent = '☁︎ サーバーと照合'; }
+      if(_detailIdx===null || !_members[_detailIdx] || _members[_detailIdx].id !== mid) return;
+      // 「読めなかった」であって「記録が無い」ではない
+      dtIvStatus('bad','⚠ スプレッドシートから読み取れませんでした。記録が消えたわけではありません。<br>'
+        +'<button onclick="checkDetailIvServer()" style="margin-top:6px;border:1px solid #cbd5e1;background:#fff;border-radius:6px;padding:5px 11px;cursor:pointer;font-size:12px;color:#334155;">もう一度照合する</button>');
+    });
+}
+
+// この端末を正にする＝いまの画面の内容をサーバーへ送り直す
+function resendDetailIvToServer(){
+  if(_detailIdx===null) return;
+  var m = _members[_detailIdx];
+  if(!m) return;
+  dtIvStatus('busy','☁︎ サーバーへ送っています…');
+  saveOneStudentToGas(m, {skipVerify:true}).then(function(res){
+    if(res && res.success) checkDetailIvServer();
+    else dtIvStatus('bad','⚠ 送れませんでした。少し待ってからもう一度押してください。<br>'
+      +'<button onclick="resendDetailIvToServer()" style="margin-top:6px;border:none;background:#dc2626;color:#fff;border-radius:6px;padding:5px 11px;cursor:pointer;font-size:12px;font-weight:700;">もう一度送る</button>');
+  });
+}
+
+// サーバーを正にする＝サーバーの面談記録でこの端末を置き換える
+function pullDetailIvFromServer(){
+  if(_detailIdx===null) return;
+  var m = _members[_detailIdx];
+  var snap = window._dtIvServerSnapshot;
+  if(!m || !snap || snap.id !== m.id){ checkDetailIvServer(); return; }
+  var loseIds = {};
+  (snap.interviews||[]).forEach(function(r){ if(r&&r.id) loseIds[r.id]=true; });
+  var lose = (m.interviews||[]).filter(function(r){ return r && r.id && !loseIds[r.id]; }).length;
+  var msg = 'サーバーの内容でこの端末の面談記録を置き換えます。';
+  if(lose) msg += '\nこの端末にしかない '+lose+'件は消えます。';
+  msg += '\nよろしいですか？';
+  if(!confirm(msg)) return;
+  m.interviews = (snap.interviews||[]).slice();
+  saveToCache();
+  renderDetailEduHist(m, 'interview');
+  renderTasks();
+  showToast('サーバーの内容に合わせました');
+  checkDetailIvServer();
 }
 
 function renderDetailEduHist(m, tab){
+  // 別の生徒に切り替わったら、サーバー照合の表示を消す（前の生徒の結果を残さない・2026-09-13）
+  if(m && _dtIvSyncFor !== m.id){ _dtIvSyncFor = m.id; dtIvStatus('idle',''); }
   var ivDiv = document.getElementById('dthistiv');
   if(!ivDiv) return;
   var items = (m.interviews||[]).slice().sort(function(a,b){
@@ -5077,11 +5225,13 @@ function saveOneStudentToGas(m, opts){
       } else if(!(opts&&opts.skipVerify)){
         verifyMemberSaved(m); // 案1(2026-07-08)：保存直後にサーバー照合。届いていなければ警告
       }
+      return data;   // 2026-09-13：呼び出し側が成否を見て「保存しました」を出せるようにする
     })
     .catch(function(e){
       window._memberSaving = false;
       console.warn('[GAS] 1件保存失敗:', e);
       showToast('GAS保存に失敗しました', true);
+      return null;
     });
 }
 
@@ -5132,6 +5282,17 @@ function _memberSaveDiff(m, sv){
   chk('CA在籍', m.attrCa?'有':'無', sv.attrCa?'有':'無');
   chk('塾退会日', m.jukuLeave, sv.jukuLeave);
   chk('CA退会日', m.caLeave, sv.caLeave);
+  // 2026-09-13 追加：面談記録が届いたかを見る。
+  //   従来は在籍まわりの5項目しか見ておらず、保存のたびに照合を1往復させているのに
+  //   面談記録が入ったかどうかは何も確認していなかった（＝面談記録が落ちても警告が出ない）。
+  var _li=(m.interviews||[]).length, _si=(sv.interviews||[]).length;
+  if(_li!==_si){
+    diff.push('面談記録の件数（この画面:'+_li+'件 ／ サーバー:'+_si+'件）');
+  } else {
+    var _sid={}; (sv.interviews||[]).forEach(function(r){ if(r&&r.id) _sid[r.id]=true; });
+    var _miss=(m.interviews||[]).filter(function(r){ return r&&r.id&&!_sid[r.id]; });
+    if(_miss.length) diff.push('面談記録 '+_miss.length+'件がサーバーに見つかりません');
+  }
   return diff;
 }
 // サーバーから1件取り直してズレ配列を返す（通信/解析失敗はrejectで上に伝える）
@@ -7105,11 +7266,14 @@ function loadAllInterviews(){
   var url = getGasUrl();
   if(!url){ body.innerHTML='<div style="font-size:13px;color:#92400e;padding:16px;">GAS未接続のため確認できません</div>'; return; }
   body.innerHTML='<div style="font-size:13px;color:#64748b;padding:24px;text-align:center;">☁︎ スプレッドシートから全生徒の面談記録を読み込んでいます…</div>';
-  fetch(url+'?action=getAllInterviews&_t='+Date.now())
-    .then(function(r){ return r.json(); })
+  // 2026-09-13：ここだけ素の fetch + r.json() で、リトライが入っていなかった。
+  //   GASは大きい応答のときHTMLのエラーページを返すことがある（2026-07-08 確認ずみ）ので、
+  //   JSON.parse が失敗して「スプレッドシート接続エラー」になっていた。他の取得と同じ smFetchJson に揃える。
+  smFetchJson(url+'?action=getAllInterviews&_t='+Date.now(), 3)
     .then(function(data){
       if(!data || !data.success){
-        body.innerHTML='<div style="font-size:13px;color:#dc2626;padding:16px;">取得に失敗しました（'+((data&&data.error)||'不明')+'）</div>';
+        body.innerHTML='<div style="font-size:13px;color:#dc2626;padding:16px;">取得に失敗しました（'+((data&&data.error)||'不明')+'）'
+          +'<div style="margin-top:8px;"><button onclick="loadAllInterviews()" style="border:1px solid #cbd5e1;background:#fff;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:12px;color:#334155;">もう一度読み込む</button></div></div>';
         return;
       }
       var serverIvs = data.interviews || []; // 既にサーバー側で新しい順
@@ -7164,7 +7328,12 @@ function loadAllInterviews(){
       body.innerHTML = html;
     })
     .catch(function(){
-      body.innerHTML='<div style="font-size:13px;color:#dc2626;padding:16px;">スプレッドシート接続エラー</div>';
+      // 「0件」と「読めなかった」を混ぜない（読めなかっただけで、記録が消えたわけではない）
+      body.innerHTML='<div style="font-size:13px;color:#dc2626;padding:16px;">'
+        +'<b>スプレッドシートから読み取れませんでした。</b><br>'
+        +'記録が消えたわけではありません。通信が詰まっているだけのことが多いので、少し待ってからもう一度押してください。'
+        +'<div style="margin-top:8px;"><button onclick="loadAllInterviews()" style="border:1px solid #cbd5e1;background:#fff;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:12px;color:#334155;">もう一度読み込む</button></div>'
+        +'</div>';
     });
 }
 
@@ -7209,7 +7378,18 @@ function saveBulkRecord(memberId){
   _bulkSaved[memberId] = true;
   clearIvDraft(memberId, date); // 本保存できたので下書きを消す（2026-06-24）
   saveToCache();
-  saveOneStudentToGas(m);
+  // 2026-09-13：GASの書き込みが終わるまでボタンを押せなくし、終わってから「保存しました」を出す。
+  //   これまでは投げっぱなしで先にトーストが出ていたので、押した後の無反応な時間が長く感じ、
+  //   かつ届いていなくても保存できたように見えていた。
+  //   ズレていたときの赤モーダルは saveOneStudentToGas 内の照合（面談記録も見るようにした）が出す。
+  var _bsb = document.getElementById('bsavebtn_'+memberId);
+  var _bsbHtml = _bsb ? _bsb.innerHTML : '';
+  if(_bsb){ _bsb.disabled = true; _bsb.innerHTML = '⏳ 保存中...'; }
+  saveOneStudentToGas(m).then(function(res){
+    var b = document.getElementById('bsavebtn_'+memberId);
+    if(b){ b.disabled = false; b.innerHTML = _bsbHtml; }
+    if(res && res.success) showToast(m.name+'に保存しました');
+  });
   renderTasks();
   // フォームリセット
   if(contentEl) contentEl.value = '';
@@ -7223,7 +7403,6 @@ function saveBulkRecord(memberId){
     });
     histIvEl.innerHTML = '<div class="bulk-card-right-title">💬 面談の記録</div>' + buildHistRight(memberId, ivItems2, true);
   }
-  showToast(m.name+'に保存しました');
   renderBulkSSA();
 }
 
