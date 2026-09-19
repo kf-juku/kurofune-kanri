@@ -12169,6 +12169,26 @@ var _polSavedAt  = {};   // 生徒id → 保存が成功したときの updatedA
 var _polOkAt     = {};   // 生徒id → 最後にサーバーと一致を確認した時刻（表示用）
 var _polUnsaved  = {};   // 生徒id → 送れていない（この端末にだけある）
 var _polMsgTimer = {};
+var _polBusyAt   = {};   // 生徒id → 「保存中…」に入った時刻。返事が来ないことに気づくため
+var _polBusyTimer = {};
+var POL_BUSY_WARN = 60000;   // これを過ぎても返事が無ければ、画面に正直に出す
+
+// 「保存中…」に入る。時計は、続けて送るひとかたまりの先頭で動かし始める
+function polBusyStart_(key) {
+  if (!_polBusyAt[key]) _polBusyAt[key] = Date.now();
+  clearTimeout(_polBusyTimer[key]);
+  // 返事が来ないまま置き去りにならないよう、時間が来たら自分で表示を見直す
+  _polBusyTimer[key] = setTimeout(function () { polRenderState(key); }, POL_BUSY_WARN + 1000);
+}
+// 「保存中…」から出る。**保留（_polPending）も必ずここで下ろす。**
+// 🚨 2026-09-20、保留を下ろし忘れる道が3つあり、送信が終わっているのに
+//    画面が「保存中…」のまま固まった（inflight=false なのに pending=true で居座る）。
+//    polPush から途中で return する道は、すべてこれを通すこと。
+function polBusyEnd_(key) {
+  _polPending[key] = false;
+  _polBusyAt[key] = 0;
+  clearTimeout(_polBusyTimer[key]);
+}
 
 // 改行をそろえる。
 // 🚨 これが無いと、改行が入っている方針は1件も保存できない。
@@ -12322,7 +12342,13 @@ function polRenderState(key) {
   live = normNlJs_(live);
   var sv = _polServer[key];
   var t, c, bold = false;
-  if (_polInflight[key] || _polPending[key]) { t = '保存中…'; c = '#6b7280'; }
+  if (_polInflight[key] || _polPending[key]) {
+    // 🚨 返事が来ないのに「保存中…」を出し続けない。
+    //    自分の画面から「止まっている」と分からないのがいちばん困る（2026-09-07 の決まり）。
+    if (_polBusyAt[key] && (Date.now() - _polBusyAt[key]) > POL_BUSY_WARN) {
+      t = '\u26a0 保存の返事がありません（もう一度［保存］を押してください）'; c = '#b91c1c'; bold = true;
+    } else { t = '保存中…'; c = '#6b7280'; }
+  }
   else if (_polUnsaved[key]) { t = '⚠ サーバーに届いていません（この端末にだけあります）'; c = '#b91c1c'; bold = true; }
   else if (sv == null) { t = ''; c = '#6b7280'; }
   else if (live === sv) { t = '✓ サーバーと同じ' + (_polOkAt[key] ? '（' + _polOkAt[key] + ' 確認）' : ''); c = '#15803d'; }
@@ -12332,13 +12358,20 @@ function polRenderState(key) {
 
 // 送るものが無い＝サーバーの内容が自分の画面の分をすでに含んでいる。
 function polAdoptServer(key, server) {
-  if (polIsFocused(key)) return;   // 入力中は画面を書き換えない
+  // サーバーが自分の分をすでに含んでいる＝ここが新しい出発点
+  _polBase[key] = server;
+  if (polIsFocused(key)) {
+    // 入力中は画面を書き換えない。
+    // 🚨 ただし表示は必ず出し直す。ここで黙って return すると「保存中…」のまま固まる（2026-09-20）。
+    _polOkAt[key] = polHM_();
+    polRenderState(key);
+    return;
+  }
   if (normNlJs_(polLiveText(key)) !== server) {
     polApplyToScreen(key, server);
     polStore(key, server, _polSavedAt[key] || '');
     polFlash(key, '他の端末の書き込みを取り込みました');
   }
-  _polBase[key] = server;
   _polOkAt[key] = polHM_();
   polRenderState(key);
 }
@@ -12347,19 +12380,35 @@ function polAdoptServer(key, server) {
 // ・送信は1人につき常に1本。送信中に呼ばれたら保留にして、返ってきてから1回だけ送り直す
 // ・照合に送る base は _polServer。合体の元にするのは _polBase
 function polPush(key, tryLeft) {
-  if (!polGasUrl()) return;
+  // 🚨 この関数から途中で return する道は、すべて polBusyEnd_ を通すこと。
+  //    通し忘れると保留が残り、送信が終わっているのに「保存中…」のまま固まる（2026-09-20）。
+  if (!polGasUrl()) { polBusyEnd_(key); polRenderState(key); return; }
   tryLeft = (tryLeft == null ? 3 : tryLeft);
-  if (_polInflight[key]) { _polPending[key] = true; polRenderState(key); return; }
+  // 🚨 入力欄が画面にあるかを、送信中かどうかより先に見る。
+  //    別の日に切り替えた・帯が描き直された等で欄が無くなっていると、
+  //    送る中身を読み出せない。それなのに保留へ積むと、誰も送らないまま
+  //    「保存中…」が居座る（2026-09-20）。欄が無いときは積まない。
   var raw = polLiveText(key);
-  if (raw == null) return;                      // その欄が画面に無い
+  if (raw == null) {
+    _polPending[key] = false;
+    if (!_polInflight[key]) polBusyEnd_(key);   // 送信中なら、その返事で片付く
+    return;
+  }
+  if (_polInflight[key]) { _polPending[key] = true; polBusyStart_(key); polRenderState(key); return; }
   var live = normNlJs_(raw);
   var diffBase = (_polBase[key] != null ? _polBase[key] : '');
   var server = (_polServer[key] != null ? _polServer[key] : diffBase);
   // サーバーが先に進んでいると分かっているときは、送る前に合体しておく
   var payload = (server === diffBase) ? live : mergePolicyLines(diffBase, live, server);
-  if (payload === server) { polAdoptServer(key, server); return; }
+  if (payload === server) {
+    // 送るものが無い（サーバーが自分の分をすでに含んでいる）。ここで必ず保留を下ろす
+    polBusyEnd_(key);
+    polAdoptServer(key, server);
+    return;
+  }
 
   _polInflight[key] = true; _polPending[key] = false;
+  polBusyStart_(key);
   polRenderState(key);
 
   polPostPolicy(key, payload, server)
@@ -12389,11 +12438,10 @@ function polPush(key, tryLeft) {
         _polUnsaved[key] = false;
         _polOkAt[key] = polHM_();
         polFlashClear(key);
+        var again = !!_polPending[key];   // 下ろす前に読む
+        polBusyEnd_(key);
         polRenderState(key);
-        if (_polPending[key]) {
-          _polPending[key] = false;
-          setTimeout(function () { polPush(key, 3); }, 0);
-        }
+        if (again) { setTimeout(function () { polPush(key, 3); }, 0); }
         return;
       }
       if (d && d.conflict) {
@@ -12409,6 +12457,7 @@ function polPush(key, tryLeft) {
       if (tryLeft > 1) { setTimeout(function () { polPush(key, tryLeft - 1); }, 2500); return; }
       // 🚨 未送信キューには積まない（base 照合があるので後から流すと必ず conflict になる）。
       //    この端末にだけある、と画面に出したまま残す。
+      polBusyEnd_(key);   // ← 下ろさないと「保存中…」が警告より優先されて出続ける
       _polUnsaved[key] = true;
       polRenderState(key);
       polFlash(key, '⚠ 保存できていません（この端末にだけあります。もう一度［保存］を押してください）', true);
@@ -12431,6 +12480,8 @@ function polVerify(key) {
       var live = normNlJs_(polLiveText(key));
       if (live === sv) {
         _polBase[key] = sv; _polUnsaved[key] = false;
+        // 照合が通った＝いま送るものは無い。止まっていた「保存中…」もここで下ろす
+        if (!_polInflight[key]) polBusyEnd_(key);
         _polOkAt[key] = polHM_();
         polRenderState(key);
         return;
