@@ -12495,7 +12495,14 @@ function polPostPolicy(key, memo, base) {
   return smPostJson(getGasUrl(), fd, 3).then(function (d) {
     // 🚨 GASを貼り替える前にHTMLだけ先に出ても壊れないようにする。
     //    古いGASは updatePolicyMemo を「不明なアクション」で返すので、従来の経路に落ちる。
-    if (d && d.success === false && String(d.error || '').indexOf('不明なアクション') >= 0) {
+    //
+    // 🚨 判定は **action名まで一致したときだけ**（2026-09-20 本番で発覚）。
+    //    中継GASごしの応答は、ときどき doGet に落ちて
+    //    {success:false, error:'不明なアクション: undefined'} が返ってくる（中継の持病）。
+    //    これを「古いGAS」と読むと、通信が揺れただけなのに生徒1人まるごとの保存に落ち、
+    //    画面に残っていた古い方針でシートを巻き戻す。**前方一致で見てはいけない。**
+    //    action名が入っていない応答は、ただの失敗として扱って送り直す。
+    if (d && d.success === false && String(d.error || '').indexOf('不明なアクション: updatePolicyMemo') >= 0) {
       return polLegacySave(key, memo);
     }
     return d;
@@ -12515,12 +12522,20 @@ function polLegacySave(key, memo) {
     return d;
   });
 }
-function polGetPolicy(key) {
+function polGetPolicy(key, retried) {
   var fd = new FormData();
   fd.append('action', 'getPolicyMemo');
   fd.append('sid', key);
   fd.append('studentName', polStudentName(key));
-  return smPostJson(getGasUrl(), fd, 2);
+  return smPostJson(getGasUrl(), fd, 2).then(function (d) {
+    // 中継が揺れて doGet に落ちた応答（不明なアクション: undefined）は1回だけ送り直す
+    if (!retried && d && d.success === false
+        && String(d.error || '').indexOf('不明なアクション') >= 0
+        && String(d.error || '').indexOf('getPolicyMemo') < 0) {
+      return polGetPolicy(key, true);
+    }
+    return d;
+  });
 }
 // ずれていたとき：機械が勝手にどちらかへ倒さず、人が選べるようにする（2026-09-07 の決まり）
 function polShowDiffChoice(key, sv, live) {
