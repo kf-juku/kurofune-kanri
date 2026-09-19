@@ -1387,9 +1387,15 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
         </div>
       </div>
       <div class="d-section">
-        <div class="d-section-title">指導方針メモ</div>
+        <div class="d-section-title" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span>指導方針メモ</span>
+          <!-- 2026-09-19：保存系ツールの決まり。「いまサーバーにあるものと、この画面が同じか」を常時出す -->
+          <span id="dPolicyState" style="font-size:11px;font-weight:700"></span>
+          <button type="button" onclick="polVerify(_polDetailKey)" style="font-size:11px;font-weight:400;padding:2px 8px;border:1px solid var(--border);background:#fff;border-radius:5px;cursor:pointer">🔍 サーバーと照合</button>
+          <span id="dPolicyMsg" style="font-size:11px;font-weight:400;margin-left:auto"></span>
+        </div>
         <div class="d-row single">
-          <div class="d-group"><textarea class="d-textarea" id="dPolicyMemo" placeholder="この会員への指導方針・注意事項など（内部メモ）" style="min-height:100px;"></textarea></div>
+          <div class="d-group"><textarea class="d-textarea" id="dPolicyMemo" placeholder="この会員への指導方針・注意事項など（内部メモ）" style="min-height:100px;" oninput="polRenderState(_polDetailKey)"></textarea></div>
         </div>
       </div>
     </div>
@@ -2527,6 +2533,7 @@ function openDetail(idx){
 
   document.getElementById('dClub').value=m.club||'';
   document.getElementById('dPolicyMemo').value=m.policyMemo||'';
+  polOpenDetail(m);   // 2026-09-19：指導方針メモの出発点（base）をこの生徒のものに揃え直す
   document.getElementById('dGradeAuto').textContent='';
   populateDetailSelect('dClassroom',loadMaster(KEY_CLS,DEFAULT_CLS),m.classroom);
   // dYoubi廃止済み
@@ -2798,7 +2805,9 @@ function saveDetail(){
   m.email       =document.getElementById('dEmail').value.trim();
   m.forestaId   =document.getElementById('dForestaId').value.trim(); // 生徒アカウント管理(2026-07-02川上さん承認)：KWTログインID
   m.club        =document.getElementById('dClub').value.trim();
-  m.policyMemo  =document.getElementById('dPolicyMemo').value.trim();
+  // 2026-09-19：指導方針メモは updatePolicyMemo だけが書く（saveDetail の最後で polPush する）。
+  //   ここで m.policyMemo に入れるのは画面表示のため。GAS には polkeep=1 で「payload を書くな」と伝える。
+  m.policyMemo  =document.getElementById('dPolicyMemo').value;
   m.attrJuku    =document.getElementById('dAttrJuku').checked;
   m.attrCa      =document.getElementById('dAttrCa').checked;
   m.jukuEnroll  =document.getElementById('dJukuEnroll').value;
@@ -2821,6 +2830,9 @@ function saveDetail(){
   // GAS保存完了を待ってからトースト（完了前のリロードで古いデータが返るのを防ぐ）
   var _saveBtn = document.getElementById('btnDetailSave');
   if(_saveBtn){ _saveBtn.disabled = true; _saveBtn.textContent = '⏳ 保存中...'; }
+  // 2026-09-19：指導方針メモは生徒1人まるごとの保存には乗せず、専用action で別に送る。
+  //   こうしないと、画面に残っていた古い方針でシートが巻き戻る（task-manager 2026-09-07 と同じ事故）。
+  if(m.id) polPush(m.id);
   saveOneStudentToGas(m).then(function(){
     showToast('保存しました');
     if(_saveBtn){ _saveBtn.disabled = false; _saveBtn.textContent = '💾 保存'; }
@@ -5220,6 +5232,9 @@ function saveOneStudentToGas(m, opts){
   var fd=new FormData();
   fd.append('action','updateOneStudent');
   fd.append('student',JSON.stringify(m));
+  // 2026-09-19：指導方針メモは payload ではなくシートの値を守れ、という印。
+  //   これを送らない古いHTMLに対しては、GAS側は従来どおり payload を書く（後方互換）。
+  fd.append('polkeep','1');
   window._memberSaving = true;
   window._lastSavedId = m.id;
   window._lastSavedAt = Date.now();
@@ -5260,6 +5275,7 @@ function updateManyStudentsToGas(list){
   var fd=new FormData();
   fd.append('action','updateManyStudents');
   fd.append('students',JSON.stringify(list));
+  fd.append('polkeep','1');   // 2026-09-19：指導方針メモはシートの値を守る
   window._memberSaving=true;
   return smPostJson(url, fd, 3)
     .then(function(data){
@@ -12120,4 +12136,426 @@ function customConfirmResolve(result){
   _customConfirmCallback = null;
   if(cb) cb(result);
 }
+
+/* =====================================================
+ * 指導方針メモの保存（2026-09-19 川上さん確定）
+ * -----------------------------------------------------
+ * task-manager のプロジェクトのフリーメモ（updateProjectNote / pushProjectNote）を
+ * そのまま踏襲したもの。向こうは 2026-08-26 に作り、08-30 に誤作動し、09-07 に中身が消えて、
+ * そのたびに直した完成形がある。**新しい方式を発明しないこと。**
+ *
+ * 🚨 このブロックは 会員管理システム/index.html と Class Board/ClassBoard.html の
+ *    2つに**まったく同じものが入っている**。片方を直したら、もう片方も必ず同じに直す。
+ *    grep の目印： POL_SHARED_BLOCK
+ *    画面ごとに違うのは、下の「この画面につなぐところ」で定義する関数だけ。
+ *
+ * 🚨 状態を2つに分けてある理由（2026-08-30 に task-manager で起きた事故）
+ *    _polServer … サーバーの現在値として分かっている版。**照合に送る base はこれ**
+ *    _polBase   … 自分の画面の枝分かれ元。**合体の元にするのはこれ**
+ *    1つで兼ねると、保存の応答が返る前に次の保存が飛んだとき、送る base が保存前のままになり、
+ *    他に誰も書いていなくても conflict になる（自分ひとりの入力で巻き戻る）。
+ *
+ * 🚨 未送信キューには積まない。base 照合があるので、後から流すと必ず conflict になる。
+ * 🚨 送る中身は「今この瞬間の入力欄」。呼ばれた時点のスナップショットを持ち回らない
+ *    （スナップショットで送ると、送信後に打った文字が合体の結果で消える＝巻き戻って見える）。
+ * ===================================================== */
+/* POL_SHARED_BLOCK ここから */
+
+var _polServer   = {};   // 生徒id → サーバーの現在値として分かっている版（照合に送る base）
+var _polBase     = {};   // 生徒id → 自分の画面の枝分かれ元（合体の元）
+var _polInflight = {};   // 生徒id → 送信中
+var _polPending  = {};   // 生徒id → 送信中に保存を頼まれた（返ってきたら1回だけ送り直す）
+var _polSavedAt  = {};   // 生徒id → 保存が成功したときの updatedAt（古い応答を捨てる判定に使う）
+var _polOkAt     = {};   // 生徒id → 最後にサーバーと一致を確認した時刻（表示用）
+var _polUnsaved  = {};   // 生徒id → 送れていない（この端末にだけある）
+var _polMsgTimer = {};
+
+// 改行をそろえる。
+// 🚨 これが無いと、改行が入っている方針は1件も保存できない。
+//    ブラウザの FormData は、文字列フィールドの中の改行を送信時に \n → \r\n へ書き換える
+//    （HTML仕様の normalize newlines）。シートに入っているのは \n なので、まったく同じ文字列を
+//    送り返しても base 照合が外れ、必ず conflict になる。GAS 側の normNl_ と対になっている。
+function normNlJs_(v) {
+  return String(v == null ? '' : v).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+}
+
+/* -----------------------------------------------------
+ * 3者マージ（行単位）
+ * base … 自分が編集を始めた時点 ／ mine … 自分の画面 ／ server … サーバーの現在値
+ * LCS で base に対する両者の追加・削除を求めて1本に合成する。DOM を使わない純粋関数。
+ * （task-manager の mergeNoteHtml はリッチテキストなので DOM を使うが、
+ *   指導方針はただの文章なので行配列で足りる）
+ * ----------------------------------------------------- */
+function polSplitLines_(t) {
+  // 空文字は「0行」として扱う。''.split('\n') の [''] を使うと、
+  // 相手が全消しした結果と合体したときに余計な空行が残る。
+  if (t === '') return [];
+  return t.split('\n');
+}
+
+// base と other の LCS から、「base の k 行目の直前に挿入された行」と
+// 「base の k 行目が生き残っているか」に変換する。base の添字を共通の物差しにする。
+function polDiffToBase_(base, other) {
+  var n = base.length, m = other.length;
+  var ins = [], keep = [], i, j;
+  for (i = 0; i <= n; i++) ins.push([]);
+  for (i = 0; i < n; i++) keep.push(false);
+
+  // 先頭と末尾の一致部分を先に削ってから DP にかける（長文の一部改訂では DP がほぼ走らない）
+  var head = 0;
+  while (head < n && head < m && base[head] === other[head]) head++;
+  var tail = 0;
+  while (tail < (n - head) && tail < (m - head) && base[n - 1 - tail] === other[m - 1 - tail]) tail++;
+  for (i = 0; i < head; i++) keep[i] = true;
+  for (i = 0; i < tail; i++) keep[n - 1 - i] = true;
+
+  var bMid = base.slice(head, n - tail);
+  var oMid = other.slice(head, m - tail);
+  var bn = bMid.length, on = oMid.length;
+
+  if (bn === 0) {
+    for (i = 0; i < on; i++) ins[head].push(oMid[i]);
+    return { ins: ins, keep: keep };
+  }
+  if (on === 0) return { ins: ins, keep: keep };
+
+  // DP が大きくなりすぎるときは「真ん中は共通なし」と見なす。
+  // 真ん中の内容が両方残るだけで、消えることはない（安全な側に倒す）。
+  if (bn * on > 1000000) {
+    for (i = 0; i < on; i++) ins[head].push(oMid[i]);
+    return { ins: ins, keep: keep };
+  }
+
+  var dp = [];
+  for (i = 0; i <= bn; i++) { var r = []; for (j = 0; j <= on; j++) r.push(0); dp.push(r); }
+  for (i = bn - 1; i >= 0; i--) {
+    for (j = on - 1; j >= 0; j--) {
+      if (bMid[i] === oMid[j]) dp[i][j] = dp[i + 1][j + 1] + 1;
+      else dp[i][j] = (dp[i + 1][j] >= dp[i][j + 1]) ? dp[i + 1][j] : dp[i][j + 1];
+    }
+  }
+  i = 0; j = 0;
+  while (i < bn && j < on) {
+    if (bMid[i] === oMid[j]) { keep[head + i] = true; i++; j++; }
+    else if (dp[i + 1][j] >= dp[i][j + 1]) { i++; }                     // base の行が消えた
+    else { ins[head + i].push(oMid[j]); j++; }                          // other が行を足した
+  }
+  while (j < on) { ins[head + bn].push(oMid[j]); j++; }
+  return { ins: ins, keep: keep };
+}
+
+function mergePolicyLines(base, mine, server) {
+  base = normNlJs_(base); mine = normNlJs_(mine); server = normNlJs_(server);
+  if (mine === base) return server;      // 自分は何も変えていない → 相手をそのまま採用
+  if (server === base) return mine;      // 相手は何も変えていない → 自分をそのまま採用
+  if (mine === server) return mine;
+
+  var b = polSplitLines_(base), mn = polSplitLines_(mine), sv = polSplitLines_(server);
+  var A = polDiffToBase_(b, mn), B = polDiffToBase_(b, sv);
+  var out = [], k, x, seen, line, key;
+
+  for (k = 0; k <= b.length; k++) {
+    seen = {};
+    for (x = 0; x < A.ins[k].length; x++) {
+      line = A.ins[k][x];
+      // 空行は「段落の区切り」なのでまとめない。まとめると2つの段落がくっつく
+      if (line !== '' && line.replace(/^\s+|\s+$/g, '') !== '') seen['#' + line] = true;
+      out.push(line);
+    }
+    for (x = 0; x < B.ins[k].length; x++) {
+      line = B.ins[k][x];
+      key = '#' + line;
+      // 自分と相手が同じ行を同じ場所に足したら1つにまとめる（同じ行を2回出さない）
+      if (line !== '' && line.replace(/^\s+|\s+$/g, '') !== '' && seen[key]) continue;
+      out.push(line);
+    }
+    // base の行は、両方が残していたときだけ出す（どちらかが消していたら消す）
+    if (k < b.length && A.keep[k] && B.keep[k]) out.push(b[k]);
+  }
+  return out.join('\n');
+}
+
+/* -----------------------------------------------------
+ * 保存の本体
+ * ----------------------------------------------------- */
+function polHM_() {
+  var d = new Date();
+  return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+}
+
+// 受け取った応答が、自分の最後の保存より古いか。
+// まとめ取得は本番で数十秒かかるため、返ってきたときには自分の保存の方が新しいことがある。
+function polRespIsStale(key, svUpdatedAt) {
+  var my = Date.parse(_polSavedAt[key] || '') || 0;
+  if (!my) return false;
+  var sv = Date.parse(svUpdatedAt || '') || 0;
+  return (!sv || sv < my);
+}
+
+function polFlashClear(key) {
+  var el = polMsgEl(key); if (!el) return;
+  clearTimeout(_polMsgTimer[key]);
+  el.textContent = ''; el.style.color = ''; el.style.fontWeight = '';
+}
+// 知らせは欄のそばに小さく出す（画面中央のトーストは使わない）。
+// 失敗の知らせは赤・太字で、消さずに残す（灰色の小さい字では気づけなかった）。
+function polFlash(key, msg, keep) {
+  var el = polMsgEl(key); if (!el) return;
+  var bad = (String(msg).indexOf('⚠') >= 0);
+  el.textContent = msg;
+  el.style.color = bad ? '#b91c1c' : '#6b7280';
+  el.style.fontWeight = bad ? '700' : '';
+  clearTimeout(_polMsgTimer[key]);
+  if (keep) return;
+  _polMsgTimer[key] = setTimeout(function () {
+    el.textContent = ''; el.style.color = ''; el.style.fontWeight = '';
+  }, 3000);
+}
+
+// 「いまサーバーにあるものと、この画面が同じか」を常時出す（2026-09-07 の決まり）。
+// 自分の画面では正常に見えるのに実は届いていない、後日ひらくと古い内容に戻っている、
+// というのが本人の画面から分からないのがいちばん困る。
+function polRenderState(key) {
+  var el = polStateEl(key); if (!el) return;
+  var live = polLiveText(key);
+  if (live == null) { el.textContent = ''; return; }
+  live = normNlJs_(live);
+  var sv = _polServer[key];
+  var t, c, bold = false;
+  if (_polInflight[key] || _polPending[key]) { t = '保存中…'; c = '#6b7280'; }
+  else if (_polUnsaved[key]) { t = '⚠ サーバーに届いていません（この端末にだけあります）'; c = '#b91c1c'; bold = true; }
+  else if (sv == null) { t = ''; c = '#6b7280'; }
+  else if (live === sv) { t = '✓ サーバーと同じ' + (_polOkAt[key] ? '（' + _polOkAt[key] + ' 確認）' : ''); c = '#15803d'; }
+  else { t = '● 未保存の変更があります'; c = '#b45309'; }
+  el.textContent = t; el.style.color = c; el.style.fontWeight = bold ? '700' : '';
+}
+
+// 送るものが無い＝サーバーの内容が自分の画面の分をすでに含んでいる。
+function polAdoptServer(key, server) {
+  if (polIsFocused(key)) return;   // 入力中は画面を書き換えない
+  if (normNlJs_(polLiveText(key)) !== server) {
+    polApplyToScreen(key, server);
+    polStore(key, server, _polSavedAt[key] || '');
+    polFlash(key, '他の端末の書き込みを取り込みました');
+  }
+  _polBase[key] = server;
+  _polOkAt[key] = polHM_();
+  polRenderState(key);
+}
+
+// 指導方針メモをGASに保存する。
+// ・送信は1人につき常に1本。送信中に呼ばれたら保留にして、返ってきてから1回だけ送り直す
+// ・照合に送る base は _polServer。合体の元にするのは _polBase
+function polPush(key, tryLeft) {
+  if (!polGasUrl()) return;
+  tryLeft = (tryLeft == null ? 3 : tryLeft);
+  if (_polInflight[key]) { _polPending[key] = true; polRenderState(key); return; }
+  var raw = polLiveText(key);
+  if (raw == null) return;                      // その欄が画面に無い
+  var live = normNlJs_(raw);
+  var diffBase = (_polBase[key] != null ? _polBase[key] : '');
+  var server = (_polServer[key] != null ? _polServer[key] : diffBase);
+  // サーバーが先に進んでいると分かっているときは、送る前に合体しておく
+  var payload = (server === diffBase) ? live : mergePolicyLines(diffBase, live, server);
+  if (payload === server) { polAdoptServer(key, server); return; }
+
+  _polInflight[key] = true; _polPending[key] = false;
+  polRenderState(key);
+
+  polPostPolicy(key, payload, server)
+    .then(function (d) {
+      _polInflight[key] = false;
+      if (d && d.success) {
+        _polServer[key] = normNlJs_(d.memo);
+        if (d.updatedAt) _polSavedAt[key] = d.updatedAt;
+        var now = normNlJs_(polLiveText(key));
+        if (payload === live) {
+          // 合体は起きていない＝送ったものがそのままサーバーに入った。
+          // 画面はその上に進んでいるだけなので、出発点は必ずここまで進める。
+          // 🚨 ここで進めないと、次の保存で「自分がさっき保存した版」を
+          //    他の端末の書き込みとみなして合体してしまい、打ち直して消したはずの
+          //    古い行が生き返る（A→AB→ABC と打つと ABC\nAB\nA になった。2026-09-19 の検証で発見）。
+          //    task-manager から写したときはこの分岐が無く、同じ穴が空いていた。
+          _polBase[key] = payload; polStore(key, payload, d.updatedAt || '');
+        } else if (!polIsFocused(key) && now === live) {
+          // 合体が起きた。画面が動いていないので、合体の結果を画面に入れてよい
+          polApplyToScreen(key, payload); polFlash(key, '他の端末の書き込みを取り込みました');
+          _polBase[key] = payload; polStore(key, payload, d.updatedAt || '');
+        } else if (now === payload) {
+          _polBase[key] = payload; polStore(key, payload, d.updatedAt || '');
+        }
+        // 合体が起きて、かつ画面が先に進んでいるときは、画面も出発点も触らない。
+        // 画面にはサーバーの分がまだ入っていないので、次の保存でもう一度合体して送る。
+        _polUnsaved[key] = false;
+        _polOkAt[key] = polHM_();
+        polFlashClear(key);
+        polRenderState(key);
+        if (_polPending[key]) {
+          _polPending[key] = false;
+          setTimeout(function () { polPush(key, 3); }, 0);
+        }
+        return;
+      }
+      if (d && d.conflict) {
+        // 他の端末が書き足していた。サーバーの現在値を覚えて、その上に自分の分を載せ直して送る
+        _polServer[key] = normNlJs_(d.memo);
+        if (tryLeft > 1) { setTimeout(function () { polPush(key, tryLeft - 1); }, 300); return; }
+        throw new Error('conflict');
+      }
+      throw new Error((d && d.error) || 'failed');
+    })
+    .catch(function () {
+      _polInflight[key] = false;
+      if (tryLeft > 1) { setTimeout(function () { polPush(key, tryLeft - 1); }, 2500); return; }
+      // 🚨 未送信キューには積まない（base 照合があるので後から流すと必ず conflict になる）。
+      //    この端末にだけある、と画面に出したまま残す。
+      _polUnsaved[key] = true;
+      polRenderState(key);
+      polFlash(key, '⚠ 保存できていません（この端末にだけあります。もう一度［保存］を押してください）', true);
+    });
+}
+
+// いまサーバーに入っている中身を取り直して、この画面と突き合わせる。
+// ずれていたら、機械が勝手にどちらかへ倒さず、人が選べるようにする。
+function polVerify(key) {
+  var el = polStateEl(key);
+  if (el) { el.textContent = '照合中…'; el.style.color = '#6b7280'; el.style.fontWeight = ''; }
+  if (!polGasUrl()) { if (el) el.textContent = 'GASのURLが設定されていません'; return; }
+  polGetPolicy(key)
+    .then(function (d) {
+      if (!d || !d.success) throw new Error((d && d.error) || '取得できません');
+      var sv = normNlJs_(d.memo || '');
+      if (polRespIsStale(key, d.updatedAt)) { polRenderState(key); return; }
+      _polServer[key] = sv;
+      if (d.updatedAt) _polSavedAt[key] = d.updatedAt;
+      var live = normNlJs_(polLiveText(key));
+      if (live === sv) {
+        _polBase[key] = sv; _polUnsaved[key] = false;
+        _polOkAt[key] = polHM_();
+        polRenderState(key);
+        return;
+      }
+      polShowDiffChoice(key, sv, live);
+    })
+    .catch(function (err) {
+      if (el) {
+        el.textContent = '⚠ 照合できませんでした（' + (err && err.message ? err.message : '通信') + '）';
+        el.style.color = '#b91c1c'; el.style.fontWeight = '700';
+      }
+    });
+}
+
+/* POL_SHARED_BLOCK ここまで */
+
+/* -----------------------------------------------------
+ * この画面につなぐところ（会員管理システム index.html 用）
+ * 上の POL_SHARED_BLOCK は ClassBoard.html と同じもの。ここだけが画面ごとに違う。
+ * 詳細画面は1人ずつしか開かないので、いま開いている生徒のidを _polDetailKey で覚える。
+ * ----------------------------------------------------- */
+var _polDetailKey = '';
+
+function polFindMember(key) {
+  for (var i = 0; i < _members.length; i++) { if (_members[i] && _members[i].id === key) return _members[i]; }
+  return null;
+}
+function polGasUrl() { return getGasUrl(); }
+function polStudentName(key) { var m = polFindMember(key); return m ? (m.name || '') : ''; }
+function polLiveText(key) {
+  if (!key || key !== _polDetailKey) return null;
+  var el = document.getElementById('dPolicyMemo');
+  return el ? el.value : null;
+}
+// カーソル位置は「先頭から何文字目か」で覚えて戻す。
+// 末尾に飛ばすと、途中を直している最中に位置を見失う。
+function polApplyToScreen(key, text) {
+  if (key !== _polDetailKey) return;
+  var el = document.getElementById('dPolicyMemo'); if (!el) return;
+  var s = el.selectionStart, e = el.selectionEnd;
+  el.value = text;
+  try { el.setSelectionRange(Math.min(s, text.length), Math.min(e, text.length)); } catch (err) {}
+}
+function polIsFocused(key) {
+  if (key !== _polDetailKey) return false;
+  return document.activeElement === document.getElementById('dPolicyMemo');
+}
+function polStateEl(key) { return (key === _polDetailKey) ? document.getElementById('dPolicyState') : null; }
+function polMsgEl(key)   { return (key === _polDetailKey) ? document.getElementById('dPolicyMsg')   : null; }
+function polStore(key, text, updatedAt) {
+  var m = polFindMember(key);
+  if (m) { m.policyMemo = text; if (updatedAt) m.policyMemoAt = updatedAt; }
+  try { saveToCache(); } catch (e) {}
+}
+function polPostPolicy(key, memo, base) {
+  var fd = new FormData();
+  fd.append('action', 'updatePolicyMemo');
+  fd.append('sid', key);
+  fd.append('studentName', polStudentName(key));
+  fd.append('memo', memo);
+  fd.append('base', base);
+  return smPostJson(getGasUrl(), fd, 3).then(function (d) {
+    // 🚨 GASを貼り替える前にHTMLだけ先に出ても壊れないようにする。
+    //    古いGASは updatePolicyMemo を「不明なアクション」で返すので、従来の経路に落ちる。
+    if (d && d.success === false && String(d.error || '').indexOf('不明なアクション') >= 0) {
+      return polLegacySave(key, memo);
+    }
+    return d;
+  });
+}
+// 古いGAS向けの逃げ道：生徒1人まるごとの保存に方針を載せて送る（貼り替え前の従来どおり）
+function polLegacySave(key, memo) {
+  var m = polFindMember(key);
+  if (!m) return Promise.resolve({ success: false, error: '生徒が見つかりません' });
+  var copy = JSON.parse(JSON.stringify(m));
+  copy.policyMemo = memo;
+  var fd = new FormData();
+  fd.append('action', 'updateOneStudent');
+  fd.append('student', JSON.stringify(copy));   // polkeep は付けない＝従来どおり payload が書かれる
+  return smPostJson(getGasUrl(), fd, 3).then(function (d) {
+    if (d && d.success) return { success: true, memo: memo, updatedAt: new Date().toISOString(), legacy: true };
+    return d;
+  });
+}
+function polGetPolicy(key) {
+  var fd = new FormData();
+  fd.append('action', 'getPolicyMemo');
+  fd.append('sid', key);
+  fd.append('studentName', polStudentName(key));
+  return smPostJson(getGasUrl(), fd, 2);
+}
+// ずれていたとき：機械が勝手にどちらかへ倒さず、人が選べるようにする（2026-09-07 の決まり）
+function polShowDiffChoice(key, sv, live) {
+  var el = polStateEl(key); if (!el) return;
+  el.textContent = ''; el.style.fontWeight = '';
+  var s = document.createElement('span');
+  s.textContent = '⚠ サーバーと中身が違います（この画面 ' + live.length + '字 ／ サーバー ' + sv.length + '字）　';
+  s.style.color = '#b91c1c'; s.style.fontWeight = '700';
+  var b1 = document.createElement('button');
+  b1.textContent = 'この端末を正にする（送る）';
+  b1.style.cssText = 'font-size:11px;padding:3px 8px;margin-right:4px;border:1px solid #C6000B;background:#C6000B;color:#fff;border-radius:5px;cursor:pointer';
+  b1.onclick = function () { polPush(key); };
+  var b2 = document.createElement('button');
+  b2.textContent = 'サーバーを正にする（取り込む）';
+  b2.style.cssText = 'font-size:11px;padding:3px 8px;border:1px solid #dde3ec;background:#fff;color:#1a2535;border-radius:5px;cursor:pointer';
+  b2.onclick = function () {
+    polApplyToScreen(key, sv);
+    polStore(key, sv, _polSavedAt[key] || '');
+    _polBase[key] = sv; _polServer[key] = sv; _polUnsaved[key] = false;
+    _polOkAt[key] = polHM_();
+    polRenderState(key);
+  };
+  el.appendChild(s); el.appendChild(b1); el.appendChild(b2);
+}
+// 詳細画面を開いたとき：出発点とサーバーの現在値をその生徒のもので揃え直す
+function polOpenDetail(m) {
+  _polDetailKey = (m && m.id) || '';
+  if (!_polDetailKey) return;
+  var k = _polDetailKey;
+  var v = normNlJs_((m && m.policyMemo) || '');
+  _polBase[k] = v;
+  if (_polServer[k] == null) _polServer[k] = v;
+  if (m && m.policyMemoAt && !_polSavedAt[k]) _polSavedAt[k] = m.policyMemoAt;
+  polFlashClear(k);
+  polRenderState(k);
+}
+
 </script></body></html>
