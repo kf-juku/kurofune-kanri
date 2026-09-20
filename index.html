@@ -12539,7 +12539,7 @@ function polStore(key, text, updatedAt) {
 function polPostPolicy(key, memo, base) {
   var fd = new FormData();
   fd.append('action', 'updatePolicyMemo');
-  fd.append('sid', key);
+  fd.append('skey', key);
   fd.append('studentName', polStudentName(key));
   fd.append('memo', memo);
   fd.append('base', base);
@@ -12576,7 +12576,7 @@ function polLegacySave(key, memo) {
 function polGetPolicy(key, retried) {
   var fd = new FormData();
   fd.append('action', 'getPolicyMemo');
-  fd.append('sid', key);
+  fd.append('skey', key);
   fd.append('studentName', polStudentName(key));
   return smPostJson(getGasUrl(), fd, 2).then(function (d) {
     // 中継が揺れて doGet に落ちた応答（不明なアクション: undefined）は1回だけ送り直す
