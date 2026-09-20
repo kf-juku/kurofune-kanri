@@ -1384,6 +1384,7 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
         </div>
         <div class="d-row single">
           <div class="d-group"><label class="d-label">部活・習い事</label><input class="d-input" id="dClub" type="text" placeholder="例：サッカー、ピアノ"></div>
+          <div class="d-group"><label class="d-label">入会経路</label><select class="d-input" id="dEnrollRoute"><option value="">選択</option><option>直電</option><option>直来</option><option>友人紹介</option><option>兄弟生</option><option>HP</option><option>チラシ</option><option>看板</option><option>SNS</option><option>ポータルサイト</option><option>その他</option></select></div>
         </div>
       </div>
       <div class="d-section">
@@ -1479,6 +1480,30 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
         <!-- 土曜授業セクション廃止済み（v2.22〜）：KOMA_DEFに統合 -->
         <div id="komaOptSatWrap" style="display:none;"></div>
         <div id="komaCaWrap"></div>
+      </div>
+
+      <!-- 自習（2026-09-20）：受講コマとは別データ。Class Board と同じ『自習割付』シートを読み書きする -->
+      <div class="d-section">
+        <div class="d-section-title">🪑 自習（いつ来るか）</div>
+        <div id="jsState" style="font-size:12px;font-weight:700;margin-bottom:6px;color:#94a3b8;"></div>
+        <div id="jsList"></div>
+        <div id="jsAdd" style="margin-top:8px;padding:8px;border:1px dashed #cbd5e1;border-radius:8px;background:#f8fafc;">
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:12px;">
+            <select class="form-select" id="jsCr" style="width:auto;" onchange="jsFillKoma()"></select>
+            <select class="form-select" id="jsKoma" style="width:auto;"></select>
+            <select class="form-select" id="jsKind" style="width:auto;" onchange="jsKindChange()">
+              <option value="weekly">毎週</option>
+              <option value="single">この日だけ</option>
+            </select>
+            <input type="date" class="form-input" id="jsDate" style="width:auto;display:none;">
+            <span id="jsLimitWrap" style="display:inline-flex;align-items:center;gap:4px;">
+              <span style="color:#64748b;">期限</span>
+              <input type="date" class="form-input" id="jsLimit" style="width:auto;">
+            </span>
+            <button class="btn-tag-add" onclick="jsAddRow()">＋ 追加</button>
+          </div>
+          <div style="font-size:11px;color:#94a3b8;margin-top:5px;">コマは選んだ教室の時間割から出ます。期限を空にすると無期限です。</div>
+        </div>
       </div>
     </div>
 
@@ -1765,12 +1790,20 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
           </select>
         </div>
         <div class="form-group" style="margin:0;">
+          <label class="form-label">生年月日</label>
+          <input class="form-input" type="date" id="enrollBirthdate">
+        </div>
+        <div class="form-group" style="margin:0;">
           <label class="form-label">保護者名</label>
           <input class="form-input" type="text" id="enrollParent" placeholder="山田 花子">
         </div>
         <div class="form-group" style="margin:0;">
           <label class="form-label">電話番号</label>
           <input class="form-input" type="text" id="enrollContact" placeholder="09012345678">
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label class="form-label">メールアドレス</label>
+          <input class="form-input" type="email" id="enrollEmail" placeholder="example@example.com">
         </div>
         <div class="form-group" style="margin:0;">
           <label class="form-label">学校名</label>
@@ -1781,6 +1814,10 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
           <label class="form-label">志望校</label>
           <select class="form-select" id="enrollTargetSchool" data-master="sm_target_schools" onchange="onComboChange(this)"></select>
           <div id="enrollTargetSchoolNewWrap" style="display:none;gap:6px;margin-top:6px;"><input class="master-add-input" id="enrollTargetSchoolNewInput" placeholder="新しい志望校"><button type="button" class="btn-tag-add" onclick="addComboNew('enrollTargetSchool')">追加</button></div>
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label class="form-label">部活・習い事</label>
+          <input class="form-input" type="text" id="enrollClub" placeholder="サッカー部・ピアノ など">
         </div>
       </div>
 
@@ -2532,6 +2569,7 @@ function openDetail(idx){
   document.getElementById('dStatus').value=m.status||'在籍';
 
   document.getElementById('dClub').value=m.club||'';
+  var _dRoute=document.getElementById('dEnrollRoute'); if(_dRoute) _dRoute.value=m.enrollRoute||'';
   document.getElementById('dPolicyMemo').value=m.policyMemo||'';
   polOpenDetail(m);   // 2026-09-19：指導方針メモの出発点（base）をこの生徒のものに揃え直す
   document.getElementById('dGradeAuto').textContent='';
@@ -2805,6 +2843,7 @@ function saveDetail(){
   m.email       =document.getElementById('dEmail').value.trim();
   m.forestaId   =document.getElementById('dForestaId').value.trim(); // 生徒アカウント管理(2026-07-02川上さん承認)：KWTログインID
   m.club        =document.getElementById('dClub').value.trim();
+  var _dRouteS=document.getElementById('dEnrollRoute'); if(_dRouteS) m.enrollRoute=_dRouteS.value||'';
   // 2026-09-19：指導方針メモは updatePolicyMemo だけが書く（saveDetail の最後で polPush する）。
   //   ここで m.policyMemo に入れるのは画面表示のため。GAS には polkeep=1 で「payload を書くな」と伝える。
   m.policyMemo  =document.getElementById('dPolicyMemo').value;
@@ -3752,8 +3791,18 @@ function _dtHhmm(){
   var d = new Date();
   return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
 }
+// 2026-09-20：入会確約から作られる面談記録のラベルが 'join' で、
+//   面談記録タブのプルダウン（入会前/春面談/夏面談/冬面談/その他）に無い値だった。
+//   新しく作るぶんは '入会前' にしたが、既に保存されているぶんは画面側で読み替える。
+//   （シートのデータは書き換えない＝移行スクリプトを作らない）
+function ivLabelText(l){
+  l = String(l||'');
+  if(l === 'join') return '入会前';
+  return l;
+}
+
 function _dtIvLine(r){
-  var lb = r && r.label ? '<span style="background:#ede9fe;color:#6d28d9;border-radius:3px;padding:0 5px;margin-left:5px;">'+esc(r.label)+'</span>' : '';
+  var lb = r && r.label ? '<span style="background:#ede9fe;color:#6d28d9;border-radius:3px;padding:0 5px;margin-left:5px;">'+esc(ivLabelText(r.label))+'</span>' : '';
   var tx = String((r&&r.content)||'').replace(/\s+/g,' ').slice(0,40);
   return '<div style="margin-top:3px;">・'+esc((r&&r.date)||'')+lb+'　'+esc(tx)+(String((r&&r.content)||'').length>40?'…':'')+(r&&r.isTask?'（約束事）':'')+'</div>';
 }
@@ -3775,8 +3824,8 @@ function checkDetailIvServer(){
       if(btn){ btn.disabled = false; btn.textContent = '☁︎ サーバーと照合'; }
       // 照合中に別の生徒へ移っていたら、その結果は捨てる（古い応答で上書きしない）
       if(_detailIdx===null || !_members[_detailIdx] || _members[_detailIdx].id !== mid) return;
-      if(!data || !data.success){
-        dtIvStatus('bad','⚠ 照合できませんでした（'+esc(String((data&&data.error)||'不明'))+'）<br>'
+      if(_svCommFail(data)){
+        dtIvStatus('warn','… サーバーに確認できませんでした（'+esc(String((data&&data.error)||'不明'))+'）。記録が消えたわけではありません。<br>'
           +'<button onclick="checkDetailIvServer()" style="margin-top:6px;border:1px solid #cbd5e1;background:#fff;border-radius:6px;padding:5px 11px;cursor:pointer;font-size:12px;color:#334155;">もう一度照合する</button>');
         return;
       }
@@ -3815,7 +3864,7 @@ function checkDetailIvServer(){
       if(btn){ btn.disabled = false; btn.textContent = '☁︎ サーバーと照合'; }
       if(_detailIdx===null || !_members[_detailIdx] || _members[_detailIdx].id !== mid) return;
       // 「読めなかった」であって「記録が無い」ではない
-      dtIvStatus('bad','⚠ スプレッドシートから読み取れませんでした。記録が消えたわけではありません。<br>'
+      dtIvStatus('warn','… スプレッドシートから読み取れませんでした。記録が消えたわけではありません。<br>'
         +'<button onclick="checkDetailIvServer()" style="margin-top:6px;border:1px solid #cbd5e1;background:#fff;border-radius:6px;padding:5px 11px;cursor:pointer;font-size:12px;color:#334155;">もう一度照合する</button>');
     });
 }
@@ -3971,7 +4020,7 @@ function startInlineHistEdit(memberId, recordId, where){
   var item = document.getElementById('histitem_'+where+'_'+memberId+'_'+recordId);
   if(!item) return;
   var labelSel = IV_LABEL_OPTS.map(function(l){
-    return '<option'+(l===(r.label||'')?' selected':'')+'>'+esc(l)+'</option>';
+    return '<option'+(l===ivLabelText(r.label||'')?' selected':'')+'>'+esc(l)+'</option>';
   }).join('');
   var form = document.createElement('div');
   form.className = 'hist-edit-form';
@@ -5353,7 +5402,13 @@ function _memberSaveDiff(m, sv){
 function _fetchMemberSaveDiff(m){
   var url=getGasUrl();
   return smFetchJson(url+'?action=getOneStudent&id='+encodeURIComponent(m.id)+'&_t='+Date.now(), 3)
-    .then(function(data){ return _memberSaveDiff(m, data && data.found && data.student); });
+    .then(function(data){
+      // 2026-09-20：中継GASの失敗応答（{success:false,…}）はJSONとして正しいので
+      //   smFetchJson を素通りしてここに来る。これを「サーバーに見つかりません」と
+      //   読み替えると、保存は届いているのに赤モーダルが出る。通信失敗として上へ投げる。
+      if(_svCommFail(data)) throw _svCommErr();
+      return _memberSaveDiff(m, data.found && data.student);
+    });
 }
 // 2026-07-14 空振りループ対策：ズレを検知しても即警告せず、0.8秒おいてもう1回だけ確認。2回連続でズレたときだけ赤モーダルを出す。
 // 保存は届いているのに直後の照合1往復だけ食い違う（GAS応答の間欠ズレ）ケースで、「再保存」を押しても繰り返す誤警告を防ぐ。
@@ -5369,16 +5424,28 @@ function verifyMemberSaved(m){
       if(diff2.length) showMemberSaveWarning(m, diff2);   // 2回連続でズレたときだけ警告
     });
   }).catch(function(){
-    // 1回目が通信/解析失敗：もう一度だけ試し、それでもダメなら通信失敗として通知
+    // 1回目が通信/解析失敗：もう一度だけ試す。
+    // 2026-09-20：2回ともダメでも赤モーダルは出さない。通信が落ちただけで
+    //   「サーバーに反映されていません」と言い切るのは嘘になる（記録は消えていない）。
     recheck().then(function(diff2){
       if(diff2.length) showMemberSaveWarning(m, diff2);
     }).catch(function(){
-      showMemberSaveWarning(m, ['サーバー確認の通信に失敗しました']);
+      if(_dtIvSyncFor && m && _dtIvSyncFor === m.id){
+        dtIvStatus('warn', '… サーバーに確認できませんでした（'+_dtHhmm()+'）。記録が消えたわけではありません。'
+          +'<div style="margin-top:5px;"><button onclick="checkDetailIvServer()" style="border:1px solid #fdba74;background:#fff;color:#9a3412;border-radius:6px;padding:3px 10px;font-size:12px;cursor:pointer;">もう一度確認</button></div>');
+      } else {
+        showToast('サーバーに確認できませんでした（記録が消えたわけではありません）', true);
+      }
     });
   });
 }
 // 検知策B(2026-07-08)：サーバー未反映を赤い専用モーダルで明確に知らせ、再保存導線を出す（トーストで流さない）
+// 2026-09-20：重ならないようにする（問い合わせ側と同じ理由）。
+var _mswShown = false;
 function showMemberSaveWarning(m, reasons){
+  if(!m) return;
+  if(_mswShown) return;
+  _mswShown = true;
   var ov=document.createElement('div');
   ov.className='overlay show';
   ov.style.zIndex='10001';
@@ -5395,10 +5462,10 @@ function showMemberSaveWarning(m, reasons){
     +'</div></div>';
   ov.appendChild(box);
   document.body.appendChild(ov);
-  box.querySelector('#_mswClose').addEventListener('click', function(){ ov.remove(); });
+  box.querySelector('#_mswClose').addEventListener('click', function(){ ov.remove(); _mswShown=false; });
   box.querySelector('#_mswResave').addEventListener('click', function(){
     var b=box.querySelector('#_mswResave'); b.disabled=true; b.textContent='再保存中...';
-    saveOneStudentToGas(m).then(function(){ ov.remove(); });
+    saveOneStudentToGas(m).then(function(){ ov.remove(); _mswShown=false; });
   });
 }
 
@@ -5630,6 +5697,8 @@ function normalizeStudent(m){
     classroom:m.classroom||'', youbi:m.youbi||'',
     school:m.school||'', targetSchool:m.targetSchool||'',
     memo:m.memo||'', club:m.club||'', policyMemo:m.policyMemo||'',
+    policyMemoAt:m.policyMemoAt||'',           // 2026-09-20：ここに無いと読み直しで落ちる
+    enrollRoute:m.enrollRoute||'',             // 2026-09-20：入会経路。ホワイトリストから漏れていた
     attrJuku:!!m.attrJuku, attrCa:!!m.attrCa,
     jukuEnroll:m.jukuEnroll||'', jukuLeave:m.jukuLeave||'',
     caEnroll:m.caEnroll||'', caLeave:m.caLeave||'',
@@ -6023,6 +6092,205 @@ function buildKomaTableHtml(defMap, komas, disabled, simpleMode, idPrefix, homeC
   return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px;">' + cols + '</div>';
 }
 
+
+// =====================================================
+// 自習（2026-09-20 川上さん確定）
+// -----------------------------------------------------
+// Class Board と同じ『自習割付』シートを読み書きする。GAS は既存の3アクションをそのまま使う
+//   getJishuAssignments / saveJishuAssignments / deleteJishuAssignments
+//
+// 【受講コマ（m.komas）とは別物】
+//   自習を m.komas に混ぜてはいけない。混ぜるとコマ監視のメール・受講ルールアラート・
+//   印刷用生徒リスト・講習モードにまで出てしまう（要件定義書_通常期の自習.md §4-1(3)）。
+//
+// 【生徒の指し方】
+//   studentId には **生徒マスタの本物のid** を書く。studentName も一緒に書く（両方持たせる）。
+//   読むときは id 優先。id で引けないときだけ氏名で引き、同姓同名なら決めない。
+//   → 川上さん指示(2026-09-20)「同姓同名が今後いても不具合が起きないように」
+// =====================================================
+var _jsRows = null;          // 自習割付の全行
+var _jsFor  = null;          // いま画面が指している生徒id
+var _jsBusy = false;
+
+function jsSetState(kind, text){
+  var el = document.getElementById('jsState'); if(!el) return;
+  var col = {ok:'#16a34a', bad:'#b91c1c', warn:'#b45309', busy:'#64748b', idle:'#94a3b8'}[kind] || '#94a3b8';
+  el.style.color = col;
+  el.innerHTML = text || '';
+}
+function _jsHhmm(){ var d=new Date(); return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2); }
+
+// 自習割付の行 → この生徒のものか。Class Board の cbJishuStu_ と同じ決まり。
+function jsRowIsFor_(r, m){
+  var rid = String((r&&r.studentId)||''), nm = String((r&&r.studentName)||'');
+  if(rid) return rid === String(m.id||'');
+  if(!nm) return false;
+  if(nm !== (m.name||'')) return false;
+  // 氏名で引くのは「その氏名が1人しかいない」ときだけ
+  var same = (_members||[]).filter(function(x){ return x && x.name === nm; });
+  return same.length === 1;
+}
+function jsRowsOf_(m){ return (_jsRows||[]).filter(function(r){ return jsRowIsFor_(r, m); }); }
+
+function jsFillCr(m){
+  var sel = document.getElementById('jsCr'); if(!sel) return;
+  var list = getClassrooms();
+  sel.innerHTML = list.map(function(c){
+    return '<option value="'+esc(c)+'"'+((m&&m.classroom)===c?' selected':'')+'>'+esc(c)+'</option>';
+  }).join('');
+  jsFillKoma();
+}
+function jsFillKoma(){
+  var crEl = document.getElementById('jsCr'), sel = document.getElementById('jsKoma');
+  if(!crEl || !sel) return;
+  var defs = (KOMA_DEF[crEl.value] || []);
+  // 同じ「曜日＋時刻」を1つにまとめる（自習は授業の種別を問わない）
+  var seen = {}, opts = [];
+  defs.forEach(function(d){
+    var k = d.youbi + '|' + d.time;
+    if(seen[k]) return; seen[k] = true;
+    opts.push('<option value="'+esc(k)+'">'+esc(d.youbi)+' '+esc(d.time)+'</option>');
+  });
+  sel.innerHTML = opts.join('');
+}
+function jsKindChange(){
+  var k = (document.getElementById('jsKind')||{}).value;
+  var dt = document.getElementById('jsDate'), lw = document.getElementById('jsLimitWrap');
+  if(dt) dt.style.display = (k==='single') ? '' : 'none';
+  if(lw) lw.style.display = (k==='single') ? 'none' : 'inline-flex';
+}
+// 期限の初期値＝年度末（Class Board の jishuDefaultLimit_ と同じ決まり）
+function jsDefaultLimit(){
+  var d = new Date(), y = d.getFullYear();
+  return (d.getMonth() <= 2 ? y : y+1) + '-03-31';
+}
+
+function jsKindLabel_(r){
+  if(r.kind === 'weekly') return '毎週 ' + esc(r.youbi||'') + '曜';
+  if(r.kind === 'single') return esc(r.date||'') + ' だけ';
+  if(r.kind === 'off')    return esc(r.date||'') + ' は来ない';
+  return esc(r.kind||'');
+}
+function jsRender(m){
+  var wrap = document.getElementById('jsList'); if(!wrap || !m) return;
+  var rows = jsRowsOf_(m);
+  if(_jsRows === null){ wrap.innerHTML = '<div style="font-size:12px;color:#94a3b8;">読み込み中…</div>'; return; }
+  if(!rows.length){ wrap.innerHTML = '<div style="font-size:12px;color:#94a3b8;">自習の登録はありません</div>'; return; }
+  var order = {weekly:0, single:1, off:2};
+  rows = rows.slice().sort(function(a,b){
+    var o = (order[a.kind]||9) - (order[b.kind]||9); if(o) return o;
+    return String(a.youbi||a.date||'').localeCompare(String(b.youbi||b.date||''));
+  });
+  wrap.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:12px;">'
+    + rows.map(function(r){
+        var lim = r.kind==='weekly' ? (r.validTo ? ('〜'+esc(r.validTo)) : '無期限') : '';
+        var bg  = r.kind==='off' ? '#fef2f2' : '#fff';
+        return '<tr style="border-bottom:1px solid #f1f5f9;background:'+bg+';">'
+          +'<td style="padding:5px 6px;white-space:nowrap;font-weight:700;color:#334155;">'+jsKindLabel_(r)+'</td>'
+          +'<td style="padding:5px 6px;white-space:nowrap;color:#64748b;">'+esc(r.classroom||'')+'</td>'
+          +'<td style="padding:5px 6px;white-space:nowrap;">'+esc(r.komaTime||'')+'</td>'
+          +'<td style="padding:5px 6px;white-space:nowrap;color:#94a3b8;">'+lim+'</td>'
+          +'<td style="padding:5px 6px;text-align:right;"><button onclick="jsDelRow(\''+esc(r.id)+'\')" style="border:1px solid #fecaca;background:#fff;color:#b91c1c;border-radius:6px;padding:2px 8px;font-size:11px;cursor:pointer;">削除</button></td>'
+          +'</tr>';
+      }).join('')
+    + '</table>';
+}
+
+// 取得。詳細を開くたびにサーバーから読み直す（他の端末・Class Board で足された分を拾う）
+function jsLoad(m){
+  var url = getGasUrl();
+  if(!url){ jsSetState('warn','GAS URL が未設定です'); return; }
+  _jsFor = m.id;
+  _jsRows = null;
+  jsRender(m);
+  jsSetState('busy','● 読み込み中…');
+  smFetchJson(url + '?action=getJishuAssignments&_t=' + Date.now(), 3)
+    .then(function(d){
+      if(_jsFor !== m.id) return;                       // 別の生徒に移っていたら捨てる
+      if(!d || d.success === false || !d.rows){ _jsRows = []; jsRender(m); jsSetState('warn','… サーバーから読めませんでした（記録が消えたわけではありません）'); return; }
+      _jsRows = d.rows;
+      jsRender(m);
+      jsSetState('ok','✓ サーバーと同じ（'+_jsHhmm()+' 確認・'+jsRowsOf_(m).length+'件）');
+    })
+    .catch(function(){
+      if(_jsFor !== m.id) return;
+      _jsRows = []; jsRender(m);
+      jsSetState('warn','… サーバーから読めませんでした（記録が消えたわけではありません）');
+    });
+}
+
+function jsAddRow(){
+  if(_jsBusy) return;
+  if(_detailIdx===null) return;
+  var m = _members[_detailIdx]; if(!m) return;
+  var url = getGasUrl(); if(!url){ showToast('GAS URL が未設定です', true); return; }
+  var cr = (document.getElementById('jsCr')||{}).value || '';
+  var kv = (document.getElementById('jsKoma')||{}).value || '';
+  if(!cr || !kv){ showToast('教室とコマを選んでください', true); return; }
+  var parts = kv.split('|'), youbi = parts[0], time = parts[1];
+  var kind = (document.getElementById('jsKind')||{}).value || 'weekly';
+  var date = (document.getElementById('jsDate')||{}).value || '';
+  var limit = (document.getElementById('jsLimit')||{}).value || '';
+  if(kind === 'single' && !date){ showToast('日付を入れてください', true); return; }
+  if(kind === 'weekly' && date) date = '';
+  var today = dateToStr(new Date());
+  var row = {
+    id: 'jsh_' + Date.now() + '_' + Math.random().toString(36).substr(2,5),
+    studentId: m.id || '', studentName: m.name || '',
+    classroom: cr,
+    kind: kind,
+    youbi: kind==='weekly' ? youbi : '',
+    date:  kind==='single' ? date : '',
+    komaTime: time,
+    validFrom: kind==='weekly' ? today : '',
+    validTo:   kind==='weekly' ? limit : '',
+    targetId: '', memo: '会員管理から登録'
+  };
+  _jsBusy = true;
+  jsSetState('busy','● 保存中…');
+  var fd = new FormData();
+  fd.append('action','saveJishuAssignments');
+  fd.append('rows', JSON.stringify([row]));
+  smPostJson(url, fd, 3)
+    .then(function(d){
+      _jsBusy = false;
+      if(!d || !d.success){ jsSetState('bad','⚠ 保存できていません（'+esc(String((d&&d.error)||'不明'))+'）'); return; }
+      jsLoad(m);                                        // サーバーの現物を取り直して確かめる
+    })
+    .catch(function(){ _jsBusy = false; jsSetState('bad','⚠ 保存できていません（通信）'); });
+}
+
+function jsDelRow(id){
+  if(_jsBusy) return;
+  if(_detailIdx===null) return;
+  var m = _members[_detailIdx]; if(!m) return;
+  var r = (_jsRows||[]).filter(function(x){ return x && x.id === id; })[0];
+  if(!r) return;
+  if(!confirm('この自習の登録を消します。よろしいですか？\n\n' + (r.kind==='weekly' ? ('毎週 '+(r.youbi||'')+'曜') : (r.date||'')) + '　' + (r.classroom||'') + '　' + (r.komaTime||''))) return;
+  var url = getGasUrl(); if(!url) return;
+  _jsBusy = true;
+  jsSetState('busy','● 削除中…');
+  var fd = new FormData();
+  fd.append('action','deleteJishuAssignments');
+  fd.append('ids', JSON.stringify([id]));
+  smPostJson(url, fd, 3)
+    .then(function(d){
+      _jsBusy = false;
+      if(!d || !d.success){ jsSetState('bad','⚠ 削除できていません（'+esc(String((d&&d.error)||'不明'))+'）'); return; }
+      jsLoad(m);
+    })
+    .catch(function(){ _jsBusy = false; jsSetState('bad','⚠ 削除できていません（通信）'); });
+}
+
+function initJishuSection(m){
+  if(!m) return;
+  jsFillCr(m);
+  var lim = document.getElementById('jsLimit'); if(lim && !lim.value) lim.value = jsDefaultLimit();
+  var dt = document.getElementById('jsDate'); if(dt) dt.value = dateToStr(new Date());
+  jsKindChange();
+  jsLoad(m);
+}
+
 function renderKomaTable(m){
   var jukuWrap = document.getElementById('komaJukuWrap');
   var caWrap   = document.getElementById('komaCaWrap');
@@ -6035,6 +6303,7 @@ function renderKomaTable(m){
   jukuHtml += buildKomaTableHtml(KOMA_DEF, komas, !attrJuku, false, '', m.classroom || ((document.getElementById('dClassroom')||{}).value) || '');
   jukuWrap.innerHTML = jukuHtml;
   attachKomaRadioToggle(jukuWrap);
+  initJishuSection(m);   // 2026-09-20：自習セクション（受講コマとは別データ）
   // CAセクション
   if(caWrap){
     var caHtml = '<div class="koma-course-header' + (!attrCa?' koma-course-header-disabled':'') + '" style="margin-top:12px;">💻 CAコマ</div>';
@@ -7107,7 +7376,7 @@ function buildHistRight(memberId, items, isIv){
   }
   html += '<div style="max-height:260px;overflow-y:auto;">';
   html += items.map(function(r){
-    var labelHtml = isIv&&r.label ? '<span class="bulk-hist-label">'+esc(r.label)+'</span>' : '';
+    var labelHtml = isIv&&r.label ? '<span class="bulk-hist-label">'+esc(ivLabelText(r.label))+'</span>' : '';
     var taskBadge = r.isTask
       ? '<span style="font-size:10px;background:#fef3c7;color:#92400e;border-radius:3px;padding:1px 5px;margin-left:4px;">📌 約束'+(r.due?' '+r.due:'')+'</span>'
         +'<span style="font-size:10px;background:#d1fae5;color:#065f46;border-radius:3px;padding:1px 5px;margin-left:4px;">📤 送信済み</span>'
@@ -7369,7 +7638,7 @@ function loadAllInterviews(){
         html += '<div style="font-size:13px;color:#64748b;text-align:center;padding:24px;">スプレッドシートに面談記録はありません</div>';
       } else {
         html += shown.map(function(r){
-          var labelHtml = r.label ? '<span style="font-size:10px;background:#ede9fe;color:#6d28d9;border-radius:3px;padding:1px 6px;margin-left:6px;">'+esc(r.label)+'</span>' : '';
+          var labelHtml = r.label ? '<span style="font-size:10px;background:#ede9fe;color:#6d28d9;border-radius:3px;padding:1px 6px;margin-left:6px;">'+esc(ivLabelText(r.label))+'</span>' : '';
           return '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;margin-bottom:8px;">'
             +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">'
             +'<span style="font-size:13px;font-weight:700;color:#0f172a;">'+esc(r.studentName||'—')+labelHtml+'</span>'
@@ -7688,6 +7957,19 @@ function _iqSaveEnd(){
 function _iqIsUnknownAction(data){
   return !!(data && data.success === false && /不明なアクション/.test(String(data.error||'')));
 }
+// 2026-09-20：サーバーの応答が「本当の答え」か「通信の失敗」かを見分ける。
+//   GASは見つからないとき {success:true, found:false} を返す（found キーが必ず付く）。
+//   中継GASは4回リトライして全部ダメだと {success:false, error:'中継先から取得できませんでした: …'}
+//   を返す。これは JSON として正しいので smFetchJson は再試行せず素通りし、
+//   受け側が data.found を見て「サーバーに見つかりません」と誤訳していた（＝赤モーダルの連発）。
+function _svCommFail(data){
+  if(!data) return true;
+  if(data.success === false) return true;       // 中継の失敗応答・GASのエラー
+  if(!('found' in data)) return true;           // 答えの形になっていない
+  return false;
+}
+function _svCommErr(){ var e = new Error('server-comm-fail'); e._commFail = true; return e; }
+
 var _iqGasStaleShown = false;
 function _iqShowGasStale(action){
   if(_iqGasStaleShown) return;   // 打鍵ごとに出さない
@@ -7708,7 +7990,9 @@ function _iqShowGasStale(action){
     +'<button id="_iqStaleClose" style="border:none;background:#dc2626;color:#fff;border-radius:8px;padding:8px 14px;cursor:pointer;font-size:13px;font-weight:700;">閉じる</button>'
     +'</div></div>';
   ov.appendChild(box); document.body.appendChild(ov);
-  box.querySelector('#_iqStaleClose').addEventListener('click', function(){ ov.remove(); _iqGasStaleShown=false; });
+  // 2026-09-20：閉じたときに抑止を戻さない。戻すと次の打鍵でまた出る（何度も閉じさせられる）。
+  //   この警告は「GASを再デプロイしてページを読み直す」まで状況が変わらないので、1回出れば十分。
+  box.querySelector('#_iqStaleClose').addEventListener('click', function(){ ov.remove(); });
 }
 
 // 問い合わせ 1件upsert
@@ -7720,14 +8004,18 @@ function saveOneInquiryToGas(iq, opts){
   fd.append('action','upsertInquiry');
   fd.append('inquiry',JSON.stringify(iq));
   _iqSaveBegin();
+  iqSetState(iq.id,'saving');
   return smPostJson(url, fd, 3)
     .then(function(data){
       _iqSaveEnd();
-      if(_iqIsUnknownAction(data)){ _iqShowGasStale('upsertInquiry'); return; }
-      if(!data || !data.success){ showToast('問い合わせのGAS保存に失敗しました（'+(data&&data.error||'不明')+'）', true); return; }
+      if(_iqIsUnknownAction(data)){ iqSetState(iq.id,'senderr'); _iqShowGasStale('upsertInquiry'); return; }
+      // 2026-09-20：1文字打つたびに走る経路なので、失敗しても赤トーストを連発しない。
+      //   代わりにカード上の状態表示を「⚠ 保存できていません」にして、送り直すボタンを出す。
+      if(!data || !data.success){ console.warn('[GAS] 問い合わせ保存 失敗:', data&&data.error); iqSetState(iq.id,'senderr'); return; }
+      iqSetState(iq.id,'pending');
       if(!(opts&&opts.skipVerify)) verifyInquirySaved(iq);
     })
-    .catch(function(e){ _iqSaveEnd(); console.warn('[GAS] 問い合わせ1件保存失敗:', e); showToast('問い合わせのGAS保存に失敗しました', true); });
+    .catch(function(e){ _iqSaveEnd(); console.warn('[GAS] 問い合わせ1件保存失敗:', e); iqSetState(iq.id,'senderr'); });
 }
 
 // 問い合わせ 複数差分upsert（変更した対象だけ渡すこと。全件を渡してはいけない）
@@ -7740,14 +8028,16 @@ function saveManyInquiriesToGas(list, opts){
   fd.append('action','upsertInquiries');
   fd.append('inquiries',JSON.stringify(payload));
   _iqSaveBegin();
+  payload.forEach(function(x){ iqSetState(x.id,'saving'); });
   return smPostJson(url, fd, 3)
     .then(function(data){
       _iqSaveEnd();
-      if(_iqIsUnknownAction(data)){ _iqShowGasStale('upsertInquiries'); return; }
-      if(!data || !data.success){ showToast('問い合わせのGAS保存に失敗しました（'+(data&&data.error||'不明')+'）', true); return; }
+      if(_iqIsUnknownAction(data)){ payload.forEach(function(x){ iqSetState(x.id,'senderr'); }); _iqShowGasStale('upsertInquiries'); return; }
+      if(!data || !data.success){ console.warn('[GAS] 問い合わせ複数保存 失敗:', data&&data.error); payload.forEach(function(x){ iqSetState(x.id,'senderr'); }); return; }
+      payload.forEach(function(x){ iqSetState(x.id,'pending'); });
       if(!(opts&&opts.skipVerify)) payload.forEach(function(x){ verifyInquirySaved(x); });
     })
-    .catch(function(e){ _iqSaveEnd(); console.warn('[GAS] 問い合わせ複数保存失敗:', e); showToast('問い合わせのGAS保存に失敗しました', true); });
+    .catch(function(e){ _iqSaveEnd(); console.warn('[GAS] 問い合わせ複数保存失敗:', e); payload.forEach(function(x){ iqSetState(x.id,'senderr'); }); });
 }
 
 // 問い合わせ 1件削除
@@ -7758,6 +8048,7 @@ function deleteOneInquiryFromGas(id, name){
   fd.append('action','deleteInquiry');
   fd.append('id',id);
   _iqSaveBegin();
+  delete _iqState[id]; delete _iqDiffReasons[id];
   return smPostJson(url, fd, 3)
     .then(function(data){
       _iqSaveEnd();
@@ -7849,6 +8140,63 @@ function deleteOneIqTaskFromGas(id){
 // 2回連続でズレたときだけ警告する（2026-07-14の空振りループ対策と同じ）。
 // =====================================================
 var _iqVerifyTimers = {};
+
+// =====================================================
+// 問い合わせカードの保存状態（2026-09-20）
+//  phase: idle / saving / pending（照合待ち）/ ok / diff / commfail / senderr
+//  赤モーダルを出さない場面でも、画面のどこかに必ず今の状態が見えているようにする。
+// =====================================================
+var _iqState = {};
+var _iqDiffReasons = {};
+function _hhmm(){ var d=new Date(); return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2); }
+function iqSetState(id, phase, extra){
+  if(!id) return;
+  var st = _iqState[id] || {};
+  st.phase = phase;
+  if(phase==='ok' || phase==='diff' || phase==='commfail') st.at = _hhmm();
+  if(extra && extra.reasons) _iqDiffReasons[id] = extra.reasons;
+  _iqState[id] = st;
+  iqRenderState(id);
+}
+function iqStateHtml(id){
+  var st = _iqState[id]; if(!st || !st.phase || st.phase==='idle') return '';
+  var base='font-size:11px;font-weight:700;white-space:nowrap;';
+  if(st.phase==='saving')  return '<span style="'+base+'color:#64748b;">● 保存中…</span>';
+  if(st.phase==='pending') return '<span style="'+base+'color:#64748b;">● 照合待ち</span>';
+  if(st.phase==='ok')      return '<span style="'+base+'color:#16a34a;">✓ サーバーと同じ（'+esc(st.at||'')+' 確認）</span>';
+  if(st.phase==='senderr') return '<span style="'+base+'color:#b91c1c;">⚠ 保存できていません</span>'
+    +' <button onclick="iqResaveNow(\''+id+'\')" style="border:1px solid #fca5a5;background:#fff;color:#b91c1c;border-radius:6px;padding:1px 7px;font-size:11px;cursor:pointer;">もう一度送る</button>';
+  if(st.phase==='commfail') return '<span style="'+base+'color:#b45309;">… サーバーに確認できませんでした（'+esc(st.at||'')+'）</span>'
+    +' <button onclick="iqVerifyNow(\''+id+'\')" style="border:1px solid #fcd34d;background:#fff;color:#92400e;border-radius:6px;padding:1px 7px;font-size:11px;cursor:pointer;">もう一度確認</button>';
+  if(st.phase==='diff')    return '<span style="'+base+'color:#b91c1c;">⚠ サーバーと違います（'+esc(st.at||'')+'）</span>'
+    +' <button onclick="iqOpenDiff(\''+id+'\')" style="border:none;background:#dc2626;color:#fff;border-radius:6px;padding:1px 8px;font-size:11px;font-weight:700;cursor:pointer;">どうするか決める</button>';
+  return '';
+}
+function iqRenderState(id){
+  var el = document.getElementById('iqstate_'+id);
+  if(el) el.innerHTML = iqStateHtml(id);
+}
+// そのカードを今いじっているか（照合はいじり終わってから）
+function isIqCardEditing(id){
+  var card = document.getElementById('iqcard_'+id);
+  var ae = document.activeElement;
+  if(card && ae && card.contains(ae)) return true;
+  if(_iqAutoSaveTimers[id] != null) return true;
+  return false;
+}
+function iqVerifyNow(id){
+  var iq = _inquiries.find(function(x){ return x && x.id===id; });
+  if(iq) verifyInquirySaved(iq);
+}
+function iqResaveNow(id){
+  var iq = _inquiries.find(function(x){ return x && x.id===id; });
+  if(iq) saveOneInquiryToGas(iq);
+}
+function iqOpenDiff(id){
+  var iq = _inquiries.find(function(x){ return x && x.id===id; });
+  if(iq) showInquirySaveWarning(iq, _iqDiffReasons[id] || []);
+}
+
 function _inquirySaveDiff(iq, sv){
   var diff=[];
   if(!sv){ diff.push('サーバーにこの問い合わせが見つかりません'); return diff; }
@@ -7867,7 +8215,11 @@ function _fetchInquirySaveDiff(iq){
   return smFetchJson(url+'?action=getOneInquiry&id='+encodeURIComponent(iq.id)+'&_t='+Date.now(), 3)
     .then(function(data){
       if(_iqIsUnknownAction(data)) return [];    // GAS未更新は保存側が既に警告済み。ここでは二重に出さない
-      return _inquirySaveDiff(iq, data && data.found && data.inquiry);
+      // 2026-09-20：通信の失敗を「サーバーに見つかりません」と読み替えない。
+      //   中継GASの失敗応答は JSON として正しいので smFetchJson を素通りしてここに来る。
+      //   これを差分として扱うと、保存は届いているのに赤モーダルが出る（連発の主因）。
+      if(_svCommFail(data)) throw _svCommErr();
+      return _inquirySaveDiff(iq, data.found && data.inquiry);
     });
 }
 function verifyInquirySaved(iq){
@@ -7880,13 +8232,30 @@ function verifyInquirySaved(iq){
     //   ここが無いと、削除済みレコードに対して「サーバーに無い」の警告が出て、
     //   再保存でサーバーに復活させてしまう。
     if(!_inquiries.some(function(x){ return x && x.id === iq.id; })) return;
+    // 2026-09-20：まだそのカードを打っている間は照合しない。打ち終わってから1回だけ見る。
+    //   中継GAS経由だと1往復が数秒かかるため、応答が返った時点から1.2秒で照合していると
+    //   メモを書いている最中に何度も照合が走っていた。
+    if(isIqCardEditing(iq.id)){ iqSetState(iq.id,'pending'); return verifyInquirySaved(iq); }
     var recheck=function(){ return new Promise(function(res){ setTimeout(res,800); }).then(function(){ return _fetchInquirySaveDiff(iq); }); };
+    var onFail=function(e){
+      // 通信の失敗は「食い違い」ではない。赤モーダルを出さず、カードに状態だけ出す。
+      if(e && e._commFail){ iqSetState(iq.id,'commfail'); return; }
+      iqSetState(iq.id,'commfail');
+    };
     _fetchInquirySaveDiff(iq).then(function(d1){
-      if(!d1.length) return;
-      return recheck().then(function(d2){ if(d2.length) showInquirySaveWarning(iq, d2); });
-    }).catch(function(){
-      recheck().then(function(d2){ if(d2.length) showInquirySaveWarning(iq, d2); })
-               .catch(function(){ showInquirySaveWarning(iq, ['サーバー確認の通信に失敗しました']); });
+      if(!d1.length){ iqSetState(iq.id,'ok'); return; }
+      return recheck().then(function(d2){
+        if(!d2.length){ iqSetState(iq.id,'ok'); return; }
+        iqSetState(iq.id,'diff',{reasons:d2});
+        showInquirySaveWarning(iq, d2);
+      }).catch(onFail);
+    }).catch(function(e1){
+      // 1回目が通信失敗：もう一度だけ試す。2回ともダメなら状態表示だけ（モーダルは出さない）。
+      recheck().then(function(d2){
+        if(!d2.length){ iqSetState(iq.id,'ok'); return; }
+        iqSetState(iq.id,'diff',{reasons:d2});
+        showInquirySaveWarning(iq, d2);
+      }).catch(onFail);
     });
   }, 1200);
 }
@@ -7896,7 +8265,14 @@ function verifyInquiryDeleted(id, name){
     if(data && data.found) showToast('\u26a0\ufe0f '+(name||'問い合わせ')+' の削除がサーバーに反映されていない可能性があります', true);
   }).catch(function(){});
 }
+// 2026-09-20：重ならないようにする（以前は出るたびに新しいoverlayを積んでいたので、
+//   照合がN回失敗すると赤モーダルがN枚重なり、1枚ずつ閉じることになっていた）。
+var _iswShown = false;
 function showInquirySaveWarning(iq, reasons){
+  if(!iq) return;
+  if(_iswShown) return;
+  _iswShown = true;
+  var _iswDone = function(ov){ ov.remove(); _iswShown = false; };
   var ov=document.createElement('div');
   ov.className='overlay show'; ov.style.zIndex='10001';
   var box=document.createElement('div');
@@ -7906,18 +8282,39 @@ function showInquirySaveWarning(iq, reasons){
     +'<div class="modal-body">'
     +'<div style="font-size:13px;color:#7f1d1d;margin-bottom:8px;">'+esc(iq.name||'この問い合わせ')+' の内容が、スプレッドシート（サーバー）と食い違っています。他の端末では古い状態が見えている可能性があります。</div>'
     +'<div style="background:#fff7ed;border:1px solid #fdba74;border-radius:6px;padding:8px 10px;font-size:12px;color:#9a3412;margin-bottom:12px;">'+reasons.map(function(x){ return '\u30fb'+esc(x); }).join('<br>')+'</div>'
-    +'<div style="display:flex;gap:8px;justify-content:flex-end;">'
+    +'<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">'
     +'<button id="_iswClose" style="border:1px solid #cbd5e1;background:#fff;border-radius:8px;padding:8px 14px;cursor:pointer;font-size:13px;color:#334155;">閉じる</button>'
-    +'<button id="_iswResave" style="border:none;background:#dc2626;color:#fff;border-radius:8px;padding:8px 14px;cursor:pointer;font-size:13px;font-weight:700;">サーバーに再保存</button>'
+    +'<button id="_iswPull" style="border:1px solid #94a3b8;background:#fff;border-radius:8px;padding:8px 14px;cursor:pointer;font-size:13px;color:#334155;">サーバーを正にする（この端末に取り込む）</button>'
+    +'<button id="_iswResave" style="border:none;background:#dc2626;color:#fff;border-radius:8px;padding:8px 14px;cursor:pointer;font-size:13px;font-weight:700;">この端末を正にする（サーバーへ送る）</button>'
     +'</div></div>';
   ov.appendChild(box); document.body.appendChild(ov);
-  box.querySelector('#_iswClose').addEventListener('click', function(){ ov.remove(); });
+  box.querySelector('#_iswClose').addEventListener('click', function(){ _iswDone(ov); });
   box.querySelector('#_iswResave').addEventListener('click', function(){
-    var b=box.querySelector('#_iswResave'); b.disabled=true; b.textContent='再保存中...';
+    var b=box.querySelector('#_iswResave'); b.disabled=true; b.textContent='送信中...';
     // 2026-08-21：skipVerify を外す。付けたままだと再保存が失敗してもモーダルが必ず閉じ、
     //   「直った」と誤解させる（会員側の showMemberSaveWarning は再照合している）。
-    //   1.2秒デバウンス＋0.8秒の2回確認があるので、2026-07-14型の空振りループにはならない。
-    saveOneInquiryToGas(iq).then(function(){ ov.remove(); });
+    saveOneInquiryToGas(iq).then(function(){ _iswDone(ov); });
+  });
+  // 2026-09-20：機械がどちらかへ勝手に倒さない（川上さん確定 2026-09-07）。
+  //   サーバー側を正にしたいときは、消える内容を見せてから取り込む。
+  var pull = box.querySelector('#_iswPull');
+  if(pull) pull.addEventListener('click', function(){
+    pull.disabled=true; pull.textContent='取り込み中...';
+    var url=getGasUrl();
+    smFetchJson(url+'?action=getOneInquiry&id='+encodeURIComponent(iq.id)+'&_t='+Date.now(), 3)
+      .then(function(data){
+        if(_svCommFail(data)){ showToast('サーバーから読めませんでした。記録が消えたわけではありません', true); pull.disabled=false; pull.textContent='サーバーを正にする（この端末に取り込む）'; return; }
+        if(!data.found || !data.inquiry){ showToast('サーバーにこの問い合わせはありません。取り込みは中止しました', true); pull.disabled=false; pull.textContent='サーバーを正にする（この端末に取り込む）'; return; }
+        if(!confirm('この端末の内容を捨てて、サーバーの内容に置き換えます。よろしいですか？')){ pull.disabled=false; pull.textContent='サーバーを正にする（この端末に取り込む）'; return; }
+        var i=_inquiries.findIndex(function(x){ return x && x.id===iq.id; });
+        if(i>=0) _inquiries[i]=data.inquiry;
+        try{ localStorage.setItem('sm_inquiries', JSON.stringify(_inquiries)); }catch(e){}
+        iqSetState(iq.id,'ok');
+        _iswDone(ov);
+        renderInquiry();
+        showToast('サーバーの内容に置き換えました');
+      })
+      .catch(function(){ showToast('サーバーから読めませんでした。記録が消えたわけではありません', true); pull.disabled=false; pull.textContent='サーバーを正にする（この端末に取り込む）'; });
   });
 }
 
@@ -7936,8 +8333,9 @@ function loadInquiriesFromGas(callback){
   if(window._iqSaving){ if(callback) callback(false); return; }
   // 問い合わせカード編集中は取得をスキップ（renderInquiryの再描画で書きかけ入力が消えるのを防止）
   if(isIqEditing()){ if(callback) callback(false); return; }
-  fetch(url + '?action=getInquiries')
-    .then(function(r){ return r.json(); })
+  // 2026-09-20：素の fetch だと、配信層がHTMLのエラーページを返したとき JSON.parse で落ちる。
+  //   他の取得と同じく smFetchJson（リトライ付き）を通す。
+  smFetchJson(url + '?action=getInquiries', 3)
     .then(function(data){
       if(data && data.inquiries){
         // 再チェック（fetch中に保存・編集が始まった場合はスキップ）
@@ -8031,6 +8429,25 @@ function renderInquiry(){
     return;
   }
   list.forEach(function(iq){ el.appendChild(buildIqCard(iq)); });
+  // 2026-09-20：学校名・志望校は会員登録側と同じマスターを使う。
+  //   populateCombo は要素がDOMに入っていないと動かないので、appendChild のあとに回す。
+  list.forEach(function(iq){
+    populateCombo('iqe_school_'+iq.id, KEY_SCHOOL, iq.school||'', gradeToType(iq.grade||''), '新しい学校を追加');
+    populateCombo('iqe_target_'+iq.id, KEY_TARGET, iq.targetSchool||'', gradeToTargetType(iq.grade||''), '新しい志望校を追加');
+  });
+}
+
+// 問い合わせカードの学校・志望校プルダウン。
+// 「新しく追加」を選んだ瞬間に保存すると空で上書きしてしまうので、そのときは保存しない。
+function onIqComboChange(sel, iqId){
+  onComboChange(sel);
+  if(sel.value === '__addnew__') return;
+  saveIqCard(iqId, true);
+}
+function onIqComboAdd(selId, iqId){
+  addComboNew(selId);
+  var sel = document.getElementById(selId);
+  if(sel && sel.value !== '__addnew__') saveIqCard(iqId, true);
 }
 
 function buildIqCard(iq){
@@ -8116,6 +8533,11 @@ function buildIqCard(iq){
   var s3cls = s3.declined ? 'declined' : (s3.done ? 'done' : '');
   var rptcls = report.done ? 'done' : (trials.some(function(t){return t.done;}) ? 'active' : '');
 
+  // 2026-09-20：性別のプルダウン。会員登録側（enrollGender）と選択肢を合わせる
+  var genderOpts = ['','男','女','その他'].map(function(g){
+    return '<option value="'+esc(g)+'"'+((iq.gender||'')===g?' selected':'')+'>'+(g||'性別')+'</option>';
+  }).join('');
+
   var lastInterviewMemo = iq.interviewMemos && iq.interviewMemos.length
     ? iq.interviewMemos[iq.interviewMemos.length-1]
     : null;
@@ -8155,6 +8577,26 @@ function buildIqCard(iq){
     +'<span style="color:#9ca3af;font-size:13px;">📞</span>'
     +'<input class="iq-inline-input" id="iqe_contact_'+iq.id+'" value="'+esc(iq.contact||'')+'" placeholder="例：09012345678（ハイフンなし）" onblur="saveIqCardAuto(this)" style="width:180px;">'
     +'<select class="iq-inline-select" id="iqe_route_'+iq.id+'" onchange="saveIqCardAuto(this)">'+routeOpts+'</select>'
+    +'<span id="iqstate_'+iq.id+'" style="margin-left:auto;display:inline-flex;align-items:center;gap:4px;">'+iqStateHtml(iq.id)+'</span>'
+    +'</div>'
+    /* 3行目：会員登録で要る項目（2026-09-20 追加）。ここを埋めておけば入会確約で打ち直さずに済む */
+    +'<div class="iq-top-row2">'
+    +'<span style="color:#9ca3af;font-size:11px;" title="生年月日">🎂</span>'
+    +'<input type="date" class="iq-inline-input" id="iqe_birth_'+iq.id+'" value="'+esc(iq.birthdate||'')+'" onchange="saveIqCardAuto(this)" style="width:135px;">'
+    +'<select class="iq-inline-select" id="iqe_gender_'+iq.id+'" onchange="saveIqCardAuto(this)">'+genderOpts+'</select>'
+    +'<span style="color:#9ca3af;font-size:13px;" title="メールアドレス">✉</span>'
+    +'<input class="iq-inline-input" id="iqe_email_'+iq.id+'" value="'+esc(iq.email||'')+'" placeholder="メールアドレス" onblur="saveIqCardAuto(this)" style="width:190px;">'
+    +'<span style="color:#9ca3af;font-size:13px;" title="部活・習い事">🏃</span>'
+    +'<input class="iq-inline-input" id="iqe_club_'+iq.id+'" value="'+esc(iq.club||'')+'" placeholder="部活・習い事" onblur="saveIqCardAuto(this)" style="width:150px;">'
+    +'</div>'
+    /* 4行目：学校名と志望校。中身は renderInquiry のあとに populateCombo で入れる（マスターと同じ仕組み） */
+    +'<div class="iq-top-row2">'
+    +'<span style="color:#9ca3af;font-size:11px;">学校</span>'
+    +'<select class="iq-inline-select" id="iqe_school_'+iq.id+'" onchange="onIqComboChange(this,\''+iq.id+'\')" style="max-width:190px;"></select>'
+    +'<span id="iqe_school_'+iq.id+'NewWrap" style="display:none;gap:4px;align-items:center;"><input class="master-add-input" id="iqe_school_'+iq.id+'NewInput" placeholder="新しい学校名"><button type="button" class="btn-tag-add" onclick="onIqComboAdd(\'iqe_school_'+iq.id+'\',\''+iq.id+'\')">追加</button></span>'
+    +'<span style="color:#9ca3af;font-size:11px;">志望校</span>'
+    +'<select class="iq-inline-select" id="iqe_target_'+iq.id+'" onchange="onIqComboChange(this,\''+iq.id+'\')" style="max-width:190px;"></select>'
+    +'<span id="iqe_target_'+iq.id+'NewWrap" style="display:none;gap:4px;align-items:center;"><input class="master-add-input" id="iqe_target_'+iq.id+'NewInput" placeholder="新しい志望校"><button type="button" class="btn-tag-add" onclick="onIqComboAdd(\'iqe_target_'+iq.id+'\',\''+iq.id+'\')">追加</button></span>'
     +'</div>'
     +'</div>'
 
@@ -9737,6 +10179,15 @@ function saveIqCard(id, skipRender){
   iq.contact   = (document.getElementById('iqe_contact_'+id).value||'').trim();
   iq.route     = document.getElementById('iqe_route_'+id).value;
   iq.date      = document.getElementById('iqe_date_'+id).value;
+  // 2026-09-20：会員登録で要る項目。問い合わせシートはL列のJSONに
+  //   「IQ_SIMPLE_KEYS 以外の全キー」を入れる作りなので、GASの変更なしで保存できる。
+  var _gv = function(elid){ var e=document.getElementById(elid); return e ? String(e.value||'').trim() : ''; };
+  iq.birthdate    = _gv('iqe_birth_'+id);
+  iq.gender       = _gv('iqe_gender_'+id);
+  iq.email        = _gv('iqe_email_'+id);
+  iq.club         = _gv('iqe_club_'+id);
+  iq.school       = comboValue('iqe_school_'+id);
+  iq.targetSchool = comboValue('iqe_target_'+id);
   iq.attrJuku  = document.getElementById('iqe_juku_'+id).checked;
   iq.attrCa    = document.getElementById('iqe_ca_'+id).checked;
   var imemoEl = document.getElementById('iqe_imemo_'+id);
@@ -9907,9 +10358,15 @@ function openEnrollPopup(iq){
   document.getElementById('enrollReading').value    = iq.reading||'';
   document.getElementById('enrollParent').value     = iq.parent||'';
   document.getElementById('enrollContact').value    = iq.contact||'';
-  populateCombo('enrollSchool', KEY_SCHOOL, '', gradeToType(iq.grade||''), '新しい学校を追加');
-  populateCombo('enrollTargetSchool', KEY_TARGET, '', gradeToTargetType(iq.grade||''), '新しい志望校を追加');
-  document.getElementById('enrollGender').value     = '';
+  // 2026-09-20：問い合わせカードで埋めた項目をそのまま持ってくる。
+  //   ここが空のままだと、結局あとで会員詳細を開いて手で打ち直すことになる。
+  var _sv = function(elid, v){ var e=document.getElementById(elid); if(e) e.value = v||''; };
+  _sv('enrollBirthdate', iq.birthdate);
+  _sv('enrollEmail',     iq.email);
+  _sv('enrollClub',      iq.club);
+  populateCombo('enrollSchool', KEY_SCHOOL, iq.school||'', gradeToType(iq.grade||''), '新しい学校を追加');
+  populateCombo('enrollTargetSchool', KEY_TARGET, iq.targetSchool||'', gradeToTargetType(iq.grade||''), '新しい志望校を追加');
+  document.getElementById('enrollGender').value     = iq.gender||'';
   // 学年セット
   var gradeEl = document.getElementById('enrollGrade');
   gradeEl.value = iq.grade||'';
@@ -10136,7 +10593,13 @@ function confirmEnrollMergeProceed(iq){
   m.grade = document.getElementById('enrollGrade').value || m.grade;
   m.gender = document.getElementById('enrollGender').value || m.gender || '';
   m.parent = val('enrollParent');
-  m.contact = val('enrollContact');
+  // 2026-09-20：正は phone（normalizeStudent が contact を phone に畳み込む）。
+  //   contact も残しておかないと、畳み込み前の画面で消えて見える。
+  m.phone = val('enrollContact');
+  m.contact = m.phone;
+  if(val('enrollBirthdate')) m.birthdate = val('enrollBirthdate');
+  if(val('enrollEmail'))     m.email     = val('enrollEmail');
+  if(val('enrollClub'))      m.club      = val('enrollClub');
   m.school = comboValue('enrollSchool');
   m.targetSchool = comboValue('enrollTargetSchool');
   m.classroom = document.getElementById('enrollClassroom').value || m.classroom;
@@ -10163,7 +10626,7 @@ function confirmEnrollMergeProceed(iq){
   if(iq.interviewMemo && iq.interviewMemo.trim()){
     var visitDate = (iq.steps && iq.steps.visit && iq.steps.visit.date) || todayStr;
     m.interviews = m.interviews || [];
-    m.interviews.push({ id: genId(), date: visitDate, label: 'join', content: iq.interviewMemo.trim(), isTask: false, due: '', taskDone: false });
+    m.interviews.push({ id: genId(), date: visitDate, label: '入会前', content: iq.interviewMemo.trim(), isTask: false, due: '', taskDone: false });
   }
   renderList(); updateClassroomFilter();
   saveToCache(); saveOneStudentToGas(m); // 検知策B/案1(2026-07-08)：保存直後にサーバー照合（saveOneStudentToGas内蔵）
@@ -10344,7 +10807,14 @@ function confirmEnrollProceed(){
     gender:       document.getElementById('enrollGender').value||'',
     school:       comboValue('enrollSchool'),
     targetSchool: comboValue('enrollTargetSchool'),
-    birthdate:'', policyMemo:'',
+    // 2026-09-20：ここに無かったので、新規で会員登録すると保護者名・電話番号が消えていた。
+    //   （統合ルート confirmEnrollMergeProceed では保存されていた＝新規だけ落ちていた）
+    parent:       (document.getElementById('enrollParent')  ? document.getElementById('enrollParent').value  : '').trim(),
+    phone:        (document.getElementById('enrollContact') ? document.getElementById('enrollContact').value : '').trim(),
+    email:        (document.getElementById('enrollEmail')   ? document.getElementById('enrollEmail').value   : '').trim(),
+    club:         (document.getElementById('enrollClub')    ? document.getElementById('enrollClub').value    : '').trim(),
+    birthdate:    (document.getElementById('enrollBirthdate') ? document.getElementById('enrollBirthdate').value : ''),
+    policyMemo:'',
     jukuEnroll: document.getElementById('enrollAttrJuku').checked ? (document.getElementById('enrollJukuEnroll').value||'') : '',
     komas:             getKomasFromWrap('enrollKomaWrap'),  // 土曜コマはKOMA_DEFに統合済み
     lessonDates:       getLessonDates('enrollLessonDates'),
@@ -10358,7 +10828,7 @@ function confirmEnrollProceed(){
     m.interviews.push({
       id: genId(),
       date: visitDate,
-      label: 'join',
+      label: '入会前',
       content: iq.interviewMemo.trim(),
       isTask: false,
       due: '',
