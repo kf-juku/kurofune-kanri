@@ -7961,6 +7961,30 @@ function loadInquiriesFromCache(){
 
 // 保存中フラグはカウンタで持つ（小さい保存が同時に何本も飛ぶため、
 // 単純なbooleanだと1本の完了で他の在飛行中を無視して取得が走ってしまう）
+// 送信を始めた問い合わせの控え。 id -> { t: 送信を始めた時刻, ok: サーバーに通ったか }
+//   ok:true  … 60秒で控えを外す（それ以降はサーバーの一覧を正とする）
+//   ok:false … 時間で外さない。保存できていないものを画面から消さないため
+var _iqRecentSaved = {};
+var IQ_KEEP_MS = 60000;
+function _iqRecentMark(id){ if(id) _iqRecentSaved[id] = { t: Date.now(), ok: false }; }
+function _iqRecentOk(id){ if(id && _iqRecentSaved[id]) _iqRecentSaved[id].ok = true; }
+function _iqRecentDrop(id){ if(id) delete _iqRecentSaved[id]; }
+// 取り直した一覧に、保存したばかりで まだ載っていないものがあれば足して返す
+function _iqKeepRecent_(list){
+  var now = Date.now(), keep = [], onServer = {};
+  (list||[]).forEach(function(x){ if(x && x.id) onServer[x.id] = true; });
+  Object.keys(_iqRecentSaved).forEach(function(id){
+    var r = _iqRecentSaved[id];
+    if(onServer[id]){ _iqRecentDrop(id); return; }          // サーバーの一覧に載った＝もう控えは要らない
+    if(r.ok && (now - r.t) > IQ_KEEP_MS){ _iqRecentDrop(id); return; }  // 通っていて時間も経った
+    var mine = (_inquiries||[]).filter(function(x){ return x && x.id === id; })[0];
+    if(mine) keep.push(mine);
+    else _iqRecentDrop(id);                                  // 画面にも無い＝残しようがない
+  });
+  if(keep.length) console.warn('[問い合わせ] 保存したばかりでサーバーの一覧にまだ出ていない ' + keep.length + '件を画面に残しました');
+  return (list||[]).concat(keep);
+}
+
 function _iqSaveBegin(){ window._iqSavingCount = (window._iqSavingCount||0) + 1; window._iqSaving = true; }
 function _iqSaveEnd(){
   window._iqSavingCount = Math.max((window._iqSavingCount||1) - 1, 0);
@@ -8019,6 +8043,7 @@ function saveOneInquiryToGas(iq, opts){
   fd.append('action','upsertInquiry');
   fd.append('inquiry',JSON.stringify(iq));
   _iqSaveBegin();
+  _iqRecentMark(iq.id);          // 2026-09-21：取得が古い一覧で上書きしても画面から消さないため
   iqSetState(iq.id,'saving');
   return smPostJson(url, fd, 3)
     .then(function(data){
@@ -8027,6 +8052,7 @@ function saveOneInquiryToGas(iq, opts){
       // 2026-09-20：1文字打つたびに走る経路なので、失敗しても赤トーストを連発しない。
       //   代わりにカード上の状態表示を「⚠ 保存できていません」にして、送り直すボタンを出す。
       if(!data || !data.success){ console.warn('[GAS] 問い合わせ保存 失敗:', data&&data.error); iqSetState(iq.id,'senderr'); return; }
+      _iqRecentOk(iq.id);
       iqSetState(iq.id,'pending');
       if(!(opts&&opts.skipVerify)) verifyInquirySaved(iq);
     })
@@ -8043,13 +8069,13 @@ function saveManyInquiriesToGas(list, opts){
   fd.append('action','upsertInquiries');
   fd.append('inquiries',JSON.stringify(payload));
   _iqSaveBegin();
-  payload.forEach(function(x){ iqSetState(x.id,'saving'); });
+  payload.forEach(function(x){ _iqRecentMark(x.id); iqSetState(x.id,'saving'); });   // 2026-09-21
   return smPostJson(url, fd, 3)
     .then(function(data){
       _iqSaveEnd();
       if(_iqIsUnknownAction(data)){ payload.forEach(function(x){ iqSetState(x.id,'senderr'); }); _iqShowGasStale('upsertInquiries'); return; }
       if(!data || !data.success){ console.warn('[GAS] 問い合わせ複数保存 失敗:', data&&data.error); payload.forEach(function(x){ iqSetState(x.id,'senderr'); }); return; }
-      payload.forEach(function(x){ iqSetState(x.id,'pending'); });
+      payload.forEach(function(x){ _iqRecentOk(x.id); iqSetState(x.id,'pending'); });
       if(!(opts&&opts.skipVerify)) payload.forEach(function(x){ verifyInquirySaved(x); });
     })
     .catch(function(e){ _iqSaveEnd(); console.warn('[GAS] 問い合わせ複数保存失敗:', e); payload.forEach(function(x){ iqSetState(x.id,'senderr'); }); });
@@ -8064,6 +8090,7 @@ function deleteOneInquiryFromGas(id, name){
   fd.append('id',id);
   _iqSaveBegin();
   delete _iqState[id]; delete _iqDiffReasons[id];
+  _iqRecentDrop(id);   // 🚨 2026-09-21：外さないと、取得のたびに削除済みが画面に復活する
   return smPostJson(url, fd, 3)
     .then(function(data){
       _iqSaveEnd();
@@ -8355,7 +8382,9 @@ function loadInquiriesFromGas(callback){
       if(data && data.inquiries){
         // 再チェック（fetch中に保存・編集が始まった場合はスキップ）
         if(window._iqSaving || isIqEditing()){ if(callback) callback(false); return; }
-        _inquiries = data.inquiries;
+        // 2026-09-21：保存したばかりでサーバーの一覧にまだ出ていないものは画面に残す
+        //   （取得が先に始まって応答が遅れて届くと、保存前の一覧で上書きされて消えるため）
+        _inquiries = _iqKeepRecent_(data.inquiries);
         try{ localStorage.setItem('sm_inquiries', JSON.stringify(_inquiries)); }catch(e){}
         // IqTasksも受信して反映
         if(data.iqTasks && Array.isArray(data.iqTasks)){
