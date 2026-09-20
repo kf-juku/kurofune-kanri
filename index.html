@@ -6123,7 +6123,15 @@ function _jsHhmm(){ var d=new Date(); return ('0'+d.getHours()).slice(-2)+':'+('
 // 自習割付の行 → この生徒のものか。Class Board の cbJishuStu_ と同じ決まり。
 function jsRowIsFor_(r, m){
   var rid = String((r&&r.studentId)||''), nm = String((r&&r.studentName)||'');
-  if(rid) return rid === String(m.id||'');
+  if(rid){
+    if(rid === String(m.id||'')) return true;
+    // 2026-09-20：本物のidで、しかも別の生徒のものなら別人。
+    //   そうでないとき（＝移行前の行で studentId に氏名が入っている等）は
+    //   「別人」と決めつけず氏名で引き直す。Class Board の cbJishuStu_ と同じ順番。
+    //   🚨 ここで早期 return すると、移行前の行が会員管理からだけ見えなくなる（実際になった）。
+    var owner = (_members||[]).filter(function(x){ return x && String(x.id||'') === rid; });
+    if(owner.length) return false;
+  }
   if(!nm) return false;
   if(nm !== (m.name||'')) return false;
   // 氏名で引くのは「その氏名が1人しかいない」ときだけ
