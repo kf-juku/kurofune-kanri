@@ -1821,6 +1821,13 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
         </div>
       </div>
 
+      <!-- 2026-09-21：指導方針。問い合わせカードに書いたものが入ってくる。ここで直せる -->
+      <div class="enroll-section-title">指導方針</div>
+      <div class="form-group" style="margin:0;">
+        <textarea class="form-input" id="enrollPolicyMemo" style="min-height:96px;resize:vertical;font-family:inherit;line-height:1.7;" placeholder="この生徒への指導方針・注意事項（内部メモ）"></textarea>
+        <div style="font-size:11px;color:#94a3b8;margin-top:5px;">問い合わせカードに書いたものが入ります。ここで直すと、その内容が会員の指導方針になります（Class Board の本日タブの帯にも出ます）。</div>
+      </div>
+
       <div class="enroll-section-title">通塾情報</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
         <div class="form-group" style="margin:0;">
@@ -8576,6 +8583,7 @@ function buildIqCard(iq){
     +'<label class="iq-course-check"><input type="checkbox" id="iqe_juku_'+iq.id+'" '+(iq.attrJuku?'checked':'')+' onchange="saveIqCardAuto(this)">🏫 塾</label>'
     +'<label class="iq-course-check" style="border-color:#c7d2fe;"><input type="checkbox" id="iqe_ca_'+iq.id+'" '+(iq.attrCa?'checked':'')+' onchange="saveIqCardAuto(this)" style="accent-color:#6366f1;">💻 CA</label>'
     +(iq.enrolledToMember ? '<span style="font-size:11px;color:#16a34a;font-weight:700;margin-left:4px;">✓ 入会確約済</span>' : '')
+    +'<span id="iqstate_'+iq.id+'" style="margin-left:auto;display:inline-flex;align-items:center;gap:4px;">'+iqStateHtml(iq.id)+'</span>'
     +'</div>'
     +'<div class="iq-top-row2">'
     +'<span style="color:#f59e0b;font-size:11px;font-weight:700;" title="読みにくい名前の場合は入力してください">よみ</span>'
@@ -8585,26 +8593,25 @@ function buildIqCard(iq){
     +'<span style="color:#9ca3af;font-size:13px;">📞</span>'
     +'<input class="iq-inline-input" id="iqe_contact_'+iq.id+'" value="'+esc(iq.contact||'')+'" placeholder="例：09012345678（ハイフンなし）" onblur="saveIqCardAuto(this)" style="width:180px;">'
     +'<select class="iq-inline-select" id="iqe_route_'+iq.id+'" onchange="saveIqCardAuto(this)">'+routeOpts+'</select>'
-    +'<span id="iqstate_'+iq.id+'" style="margin-left:auto;display:inline-flex;align-items:center;gap:4px;">'+iqStateHtml(iq.id)+'</span>'
+    +'<span style="color:#9ca3af;font-size:13px;" title="メールアドレス">✉</span>'
+    +'<input class="iq-inline-input" id="iqe_email_'+iq.id+'" value="'+esc(iq.email||'')+'" placeholder="メールアドレス" onblur="saveIqCardAuto(this)" style="flex:1;min-width:170px;">'
     +'</div>'
-    /* 3行目：会員登録で要る項目（2026-09-20 追加）。ここを埋めておけば入会確約で打ち直さずに済む */
+    /* 3行目（2026-09-21 モック承認）：生年月日・性別・学校・志望校・部活・指導方針。
+       学校と志望校の中身は renderInquiry のあとに populateCombo で入れる（マスターと同じ仕組み） */
     +'<div class="iq-top-row2">'
     +'<span style="color:#9ca3af;font-size:11px;" title="生年月日">🎂</span>'
     +'<input type="date" class="iq-inline-input" id="iqe_birth_'+iq.id+'" value="'+esc(iq.birthdate||'')+'" onchange="saveIqCardAuto(this)" style="width:135px;">'
     +'<select class="iq-inline-select" id="iqe_gender_'+iq.id+'" onchange="saveIqCardAuto(this)">'+genderOpts+'</select>'
-    +'<span style="color:#9ca3af;font-size:13px;" title="メールアドレス">✉</span>'
-    +'<input class="iq-inline-input" id="iqe_email_'+iq.id+'" value="'+esc(iq.email||'')+'" placeholder="メールアドレス" onblur="saveIqCardAuto(this)" style="width:190px;">'
-    +'<span style="color:#9ca3af;font-size:13px;" title="部活・習い事">🏃</span>'
-    +'<input class="iq-inline-input" id="iqe_club_'+iq.id+'" value="'+esc(iq.club||'')+'" placeholder="部活・習い事" onblur="saveIqCardAuto(this)" style="width:150px;">'
-    +'</div>'
-    /* 4行目：学校名と志望校。中身は renderInquiry のあとに populateCombo で入れる（マスターと同じ仕組み） */
-    +'<div class="iq-top-row2">'
     +'<span style="color:#9ca3af;font-size:11px;">学校</span>'
-    +'<select class="iq-inline-select" id="iqe_school_'+iq.id+'" onchange="onIqComboChange(this,\''+iq.id+'\')" style="max-width:190px;"></select>'
+    +'<select class="iq-inline-select" id="iqe_school_'+iq.id+'" onchange="onIqComboChange(this,\''+iq.id+'\')" style="max-width:200px;"></select>'
     +'<span id="iqe_school_'+iq.id+'NewWrap" style="display:none;gap:4px;align-items:center;"><input class="master-add-input" id="iqe_school_'+iq.id+'NewInput" placeholder="新しい学校名"><button type="button" class="btn-tag-add" onclick="onIqComboAdd(\'iqe_school_'+iq.id+'\',\''+iq.id+'\')">追加</button></span>'
     +'<span style="color:#9ca3af;font-size:11px;">志望校</span>'
-    +'<select class="iq-inline-select" id="iqe_target_'+iq.id+'" onchange="onIqComboChange(this,\''+iq.id+'\')" style="max-width:190px;"></select>'
+    +'<select class="iq-inline-select" id="iqe_target_'+iq.id+'" onchange="onIqComboChange(this,\''+iq.id+'\')" style="max-width:200px;"></select>'
     +'<span id="iqe_target_'+iq.id+'NewWrap" style="display:none;gap:4px;align-items:center;"><input class="master-add-input" id="iqe_target_'+iq.id+'NewInput" placeholder="新しい志望校"><button type="button" class="btn-tag-add" onclick="onIqComboAdd(\'iqe_target_'+iq.id+'\',\''+iq.id+'\')">追加</button></span>'
+    +'<span style="color:#9ca3af;font-size:13px;" title="部活・習い事">🏃</span>'
+    +'<input class="iq-inline-input" id="iqe_club_'+iq.id+'" value="'+esc(iq.club||'')+'" placeholder="部活・習い事" onblur="saveIqCardAuto(this)" style="width:115px;">'
+    +'<span style="color:#9ca3af;font-size:13px;" title="指導方針">📋</span>'
+    +'<input class="iq-inline-input" id="iqe_pol_'+iq.id+'" value="'+esc(iq.policyMemo||'')+'" placeholder="指導方針・注意事項（内部メモ）" onblur="saveIqCardAuto(this)" style="flex:1;min-width:190px;">'
     +'</div>'
     +'</div>'
 
@@ -10196,6 +10203,9 @@ function saveIqCard(id, skipRender){
   iq.club         = _gv('iqe_club_'+id);
   iq.school       = comboValue('iqe_school_'+id);
   iq.targetSchool = comboValue('iqe_target_'+id);
+  // 2026-09-21：指導方針を問い合わせの段階から書けるようにした（川上さん確定）。
+  //   会員登録すると、ここに書いたものが生徒の policyMemo になる。
+  iq.policyMemo   = _gv('iqe_pol_'+id);
   iq.attrJuku  = document.getElementById('iqe_juku_'+id).checked;
   iq.attrCa    = document.getElementById('iqe_ca_'+id).checked;
   var imemoEl = document.getElementById('iqe_imemo_'+id);
@@ -10372,6 +10382,7 @@ function openEnrollPopup(iq){
   _sv('enrollBirthdate', iq.birthdate);
   _sv('enrollEmail',     iq.email);
   _sv('enrollClub',      iq.club);
+  _sv('enrollPolicyMemo', iq.policyMemo);   // 2026-09-21
   populateCombo('enrollSchool', KEY_SCHOOL, iq.school||'', gradeToType(iq.grade||''), '新しい学校を追加');
   populateCombo('enrollTargetSchool', KEY_TARGET, iq.targetSchool||'', gradeToTargetType(iq.grade||''), '新しい志望校を追加');
   document.getElementById('enrollGender').value     = iq.gender||'';
@@ -10608,6 +10619,30 @@ function confirmEnrollMergeProceed(iq){
   if(val('enrollBirthdate')) m.birthdate = val('enrollBirthdate');
   if(val('enrollEmail'))     m.email     = val('enrollEmail');
   if(val('enrollClub'))      m.club      = val('enrollClub');
+  // 2026-09-21：指導方針。統合先は既存行なので polkeep が効いて、
+  //   生徒まるごとの保存には乗らない。専用の保存（updatePolicyMemo）で別に送る。
+  var _polEl  = document.getElementById('enrollPolicyMemo');
+  var _polNew = _polEl ? normNlJs_(_polEl.value) : '';
+  var _polOld = normNlJs_(m.policyMemo || '');
+  if(_polEl && _polNew !== _polOld){
+    m.policyMemo = _polNew;
+    _polBase[m.id]   = _polNew;    // 出発点を進める（次の保存で自分の1つ前の版と合体しないように）
+    _polServer[m.id] = _polNew;
+    polPostPolicy(m.id, _polNew, _polOld).then(function(d){
+      if(d && d.conflict){
+        // 他の端末が先に書いていた。勝手に倒さない。
+        // サーバーの値を控えておくと、会員詳細を開いたときに見比べられる。
+        // ここを控えないと、あとから「どこが違うのか」が分からなくなる。
+        _polServer[m.id] = normNlJs_(d.memo || '');
+        _polBase[m.id]   = _polServer[m.id];
+        showToast('指導方針は他の端末で先に更新されていました。会員詳細を開いて見比べてください', true);
+      } else if(!d || !d.success){
+        showToast('指導方針だけ保存できませんでした。会員詳細で入れ直してください', true);
+      }
+    }).catch(function(){
+      showToast('指導方針だけ保存できませんでした。会員詳細で入れ直してください', true);
+    });
+  }
   m.school = comboValue('enrollSchool');
   m.targetSchool = comboValue('enrollTargetSchool');
   m.classroom = document.getElementById('enrollClassroom').value || m.classroom;
@@ -10822,7 +10857,9 @@ function confirmEnrollProceed(){
     email:        (document.getElementById('enrollEmail')   ? document.getElementById('enrollEmail').value   : '').trim(),
     club:         (document.getElementById('enrollClub')    ? document.getElementById('enrollClub').value    : '').trim(),
     birthdate:    (document.getElementById('enrollBirthdate') ? document.getElementById('enrollBirthdate').value : ''),
-    policyMemo:'',
+    // 2026-09-21：問い合わせ→入会確約で書いた指導方針をそのまま持たせる。
+    //   新規追加の行には polkeep（シートの値を守る）が効かないので、これで書かれる。
+    policyMemo:   (document.getElementById('enrollPolicyMemo') ? document.getElementById('enrollPolicyMemo').value : ''),
     jukuEnroll: document.getElementById('enrollAttrJuku').checked ? (document.getElementById('enrollJukuEnroll').value||'') : '',
     komas:             getKomasFromWrap('enrollKomaWrap'),  // 土曜コマはKOMA_DEFに統合済み
     lessonDates:       getLessonDates('enrollLessonDates'),
