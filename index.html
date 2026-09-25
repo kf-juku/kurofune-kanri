@@ -2786,6 +2786,21 @@ function updateKomaAlertBanner(){
   }).join('');
 }
 
+// ===== フォレスタIDの重複チェック（2026-09-25 川上さん指示） =====
+// 比較は「全角数字→半角・空白をすべて除去」した値で行う（123456 と １２３４５６ を同じとみなす）。
+function _normForestaId(v){
+  return String(v==null?'':v).replace(/[０-９]/g,function(c){ return String.fromCharCode(c.charCodeAt(0)-0xFEE0); }).replace(/[\s\u3000]/g,'');
+}
+// 同じフォレスタIDを持つ生徒を返す。self（いま編集中の生徒）は除く。退会・卒業済みも含めて全員を見る。
+function findForestaIdOwners(fid, self){
+  var key=_normForestaId(fid); if(!key) return [];
+  return (_members||[]).filter(function(o){
+    if(!o || o===self) return false;
+    if(self && self.id && o.id===self.id) return false;
+    return _normForestaId(o.forestaId)===key;
+  });
+}
+
 // ===== フォレスタID未設定アラート（生徒アカウント管理 2026-07-02） =====
 // 対象：status=在籍 かつ attrJuku=true(塾生) かつ 中学生 かつ forestaId空
 function checkForestaIdMissing(members){
@@ -2824,6 +2839,23 @@ function updateForestaAlertBanner(){
 function saveDetail(){
   if(_detailIdx===null) return;
   var m=_members[_detailIdx];
+  // 2026-09-25 川上さん指示：フォレスタIDは重複不可。在籍・休会・退会（卒業を含む）の全員と比べ、重なったら保存を止める。
+  //   m を書き換える前に判定する（途中で return しても画面と _members が食い違わないように）。
+  //   判定するのは「入力が保存済みの値から変わったとき」だけ。退会確定・解除などが自動で saveDetail を呼ぶので、
+  //   ID欄を触っていない保存まで止めると、確定フラグだけ立って保存されない状態が生まれるため。
+  var _fidEl = document.getElementById('dForestaId');
+  var _fid = _normForestaId(_fidEl.value);
+  if(_fid && _fid !== _normForestaId(m.forestaId)){
+    var _dups = findForestaIdOwners(_fid, m);
+    if(_dups.length){
+      alert('フォレスタID「'+_fid+'」は、すでに次の生徒が使っています。\n\n'
+        + _dups.map(function(o){ return '・'+(o.name||'（名前未設定）')+'（'+(o.grade||'学年なし')+'・'+(o.status||'在籍')+'）'; }).join('\n')
+        + '\n\n保存を中止しました。番号を確かめて入力し直してください。');
+      try{ _fidEl.focus(); _fidEl.select(); }catch(e){}
+      return;
+    }
+  }
+  _fidEl.value = _fid;
   m.name        =document.getElementById('dName').value.trim();
   m.reading     =document.getElementById('dReading').value.trim();
   m.birthdate   =document.getElementById('dBirthdate').value;
@@ -2848,7 +2880,7 @@ function saveDetail(){
   m.parent      =document.getElementById('dParent').value.trim();
   m.phone       =document.getElementById('dPhone').value.trim();
   m.email       =document.getElementById('dEmail').value.trim();
-  m.forestaId   =document.getElementById('dForestaId').value.trim(); // 生徒アカウント管理(2026-07-02川上さん承認)：KWTログインID
+  m.forestaId   =_fid; // 生徒アカウント管理(2026-07-02川上さん承認)：KWTログインID。2026-09-25〜全角→半角・空白除去して保存
   m.club        =document.getElementById('dClub').value.trim();
   var _dRouteS=document.getElementById('dEnrollRoute'); if(_dRouteS) m.enrollRoute=_dRouteS.value||'';
   // 2026-09-19：指導方針メモは updatePolicyMemo だけが書く（saveDetail の最後で polPush する）。
