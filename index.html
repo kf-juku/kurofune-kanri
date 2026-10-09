@@ -6223,16 +6223,29 @@ function jsRender(m){
   var rows = jsRowsOf_(m);
   if(_jsRows === null){ wrap.innerHTML = '<div style="font-size:12px;color:#94a3b8;">読み込み中…</div>'; return; }
   if(!rows.length){ wrap.innerHTML = '<div style="font-size:12px;color:#94a3b8;">自習の登録はありません</div>'; return; }
-  var order = {weekly:0, single:1, off:2};
+  // 2026-10-09：曜日（月→日）→時刻の順に並べる。以前は曜日を文字コード順で比べていて
+  //   「金→月→水」になり、同じ曜日の中も時刻順になっていなかった。
+  //   毎週の行が先、日付指定（この日だけ／来ない）は日付→時刻の順で後ろに続ける。
+  var order = {weekly:0, single:1, off:1};
+  var YB = {'月':1,'火':2,'水':3,'木':4,'金':5,'土':6,'日':7};
+  function tmin(r){ var mm = String(r.komaTime||'').match(/(\d{1,2}):(\d{2})/); return mm ? (+mm[1])*60 + (+mm[2]) : 9999; }
   rows = rows.slice().sort(function(a,b){
-    var o = (order[a.kind]||9) - (order[b.kind]||9); if(o) return o;
-    return String(a.youbi||a.date||'').localeCompare(String(b.youbi||b.date||''));
+    var ka = (a.kind in order) ? order[a.kind] : 9, kb = (b.kind in order) ? order[b.kind] : 9;
+    if(ka !== kb) return ka - kb;
+    if(a.kind === 'weekly' && b.kind === 'weekly'){
+      var y = (YB[a.youbi]||9) - (YB[b.youbi]||9); if(y) return y;
+    } else {
+      var d = String(a.date||'').localeCompare(String(b.date||'')); if(d) return d;
+    }
+    return tmin(a) - tmin(b);
   });
   wrap.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:12px;">'
-    + rows.map(function(r){
+    + rows.map(function(r, i){
+        var gk = function(x){ return x ? (x.kind==='weekly' ? 'w'+x.youbi : 'd'+x.date) : ''; };
+        var newGroup = i > 0 && gk(rows[i-1]) !== gk(r);
         var lim = r.kind==='weekly' ? (r.validTo ? ('〜'+esc(r.validTo)) : '無期限') : '';
         var bg  = r.kind==='off' ? '#fef2f2' : '#fff';
-        return '<tr style="border-bottom:1px solid #f1f5f9;background:'+bg+';">'
+        return '<tr style="border-bottom:1px solid #f1f5f9;background:'+bg+';'+(newGroup?'border-top:2px solid #cbd5e1;':'')+'">'
           +'<td style="padding:5px 6px;white-space:nowrap;font-weight:700;color:#334155;">'+jsKindLabel_(r)+'</td>'
           +'<td style="padding:5px 6px;white-space:nowrap;color:#64748b;">'+esc(r.classroom||'')+'</td>'
           +'<td style="padding:5px 6px;white-space:nowrap;">'+esc(r.komaTime||'')+'</td>'
