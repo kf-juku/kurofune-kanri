@@ -1500,6 +1500,7 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
               <span style="color:#64748b;">期限</span>
               <input type="date" class="form-input" id="jsLimit" style="width:auto;">
             </span>
+            <input type="text" class="form-input" id="jsMemo" placeholder="やること" style="flex:1;min-width:140px;">
             <button class="btn-tag-add" onclick="jsAddRow()">＋ 追加</button>
           </div>
           <div style="font-size:11px;color:#94a3b8;margin-top:5px;">コマは選んだ教室の時間割から出ます。期限を空にすると無期限です。</div>
@@ -6212,6 +6213,15 @@ function jsDefaultLimit(){
   return (d.getMonth() <= 2 ? y : y+1) + '-03-31';
 }
 
+// 自習のメモ（2026-10-16）。Class Board の jishuMemoShown_ と同じ決まり。
+//  記録用の文字（移行の印・以前この画面が書いていた「会員管理から登録」）はメモとして出さない。シートの文字は消さない。
+function jsMemoShown_(m){
+  var t = String(m == null ? '' : m).trim();
+  if(!t) return '';
+  if(t.indexOf('講習生徒割付から移行') === 0) return '';
+  if(t === '会員管理から登録') return '';
+  return t;
+}
 function jsKindLabel_(r){
   if(r.kind === 'weekly') return '毎週 ' + esc(r.youbi||'') + '曜';
   if(r.kind === 'single') return esc(r.date||'') + ' だけ';
@@ -6250,6 +6260,7 @@ function jsRender(m){
           +'<td style="padding:5px 6px;white-space:nowrap;color:#64748b;">'+esc(r.classroom||'')+'</td>'
           +'<td style="padding:5px 6px;white-space:nowrap;">'+esc(r.komaTime||'')+'</td>'
           +'<td style="padding:5px 6px;white-space:nowrap;color:#94a3b8;">'+lim+'</td>'
+          +'<td style="padding:5px 6px;color:#334155;">'+esc(jsMemoShown_(r.memo))+'</td>'
           +'<td style="padding:5px 6px;text-align:right;"><button onclick="jsDelRow(\''+esc(r.id)+'\')" style="border:1px solid #fecaca;background:#fff;color:#b91c1c;border-radius:6px;padding:2px 8px;font-size:11px;cursor:pointer;">削除</button></td>'
           +'</tr>';
       }).join('')
@@ -6304,7 +6315,8 @@ function jsAddRow(){
     komaTime: time,
     validFrom: kind==='weekly' ? today : '',
     validTo:   kind==='weekly' ? limit : '',
-    targetId: '', memo: '会員管理から登録'
+    // 2026-10-16：「会員管理から登録」を書くのをやめ、入力したやることを入れる
+    targetId: '', memo: String((document.getElementById('jsMemo')||{}).value || '').trim()
   };
   _jsBusy = true;
   jsSetState('busy','● 保存中…');
@@ -6315,6 +6327,7 @@ function jsAddRow(){
     .then(function(d){
       _jsBusy = false;
       if(!d || !d.success){ jsSetState('bad','⚠ 保存できていません（'+esc(String((d&&d.error)||'不明'))+'）'); return; }
+      var _jm = document.getElementById('jsMemo'); if(_jm) _jm.value = '';   // 保存できたときだけ空にする
       jsLoad(m);                                        // サーバーの現物を取り直して確かめる
     })
     .catch(function(){ _jsBusy = false; jsSetState('bad','⚠ 保存できていません（通信）'); });
@@ -6347,6 +6360,7 @@ function initJishuSection(m){
   jsFillCr(m);
   var lim = document.getElementById('jsLimit'); if(lim && !lim.value) lim.value = jsDefaultLimit();
   var dt = document.getElementById('jsDate'); if(dt) dt.value = dateToStr(new Date());
+  var jm = document.getElementById('jsMemo'); if(jm) jm.value = '';   // 2026-10-16：別の生徒に書きかけを持ち越さない
   jsKindChange();
   jsLoad(m);
 }
