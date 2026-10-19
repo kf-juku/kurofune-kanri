@@ -5879,7 +5879,7 @@ function iqSeiSync(id, which){
 // 対象：在籍中の生徒。理由＝姓なし／よみなし／姓よみなし／姓が名前と合わない／姓よみがよみと合わない
 // 🚨 フォレスタCSVからの一括取り込みが済むまでは出さない（ほぼ全員が並んで意味をなさないため。川上さん 2026-10-19）。
 //    取り込みが終わったら true にして push する。
-var SEI_ALERT_ON = false;
+var SEI_ALERT_ON = true;   // 2026-10-20 川上さん：取り込み（110人）が済んだので出す（A案）
 function checkSeiMissing(members){
   return (members||[]).filter(function(m){ return m.status === '在籍'; }).map(function(m){
     var why = [];
