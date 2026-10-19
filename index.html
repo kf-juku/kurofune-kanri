@@ -580,6 +580,24 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
 .iq-top-row2 { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .iq-name-input { font-size:16px; font-weight:700; color:#1f2937; border:none; border-bottom:2px solid #e5e7eb; background:transparent; padding:2px 4px; font-family:inherit; width:130px; transition:border-color 0.15s; }
 .iq-name-input:focus { outline:none; border-bottom-color:var(--crimson); }
+/* 姓と名の切れ目（川上さん指示 2026-10-19）：漢字の行とよみの行をそろえ、それぞれの横で姓を切り分ける */
+.iq-namegrid { display:grid; grid-template-columns:150px auto 70px auto minmax(56px,auto); column-gap:6px; row-gap:6px; align-items:center; flex-shrink:0; }
+.iq-namegrid .iq-name-input { width:100%; }
+.iq-rd-wrap { display:flex; align-items:center; gap:6px; min-width:0; }
+.iq-rd-wrap .iq-inline-input { flex:1; min-width:0; }
+.sei-lbl { font-size:11px; color:#6b7280; }
+.sei-input { font-size:12px; border:1.5px solid #e5e7eb; border-radius:6px; padding:2px 6px; width:100%; font-family:inherit; background:#fff; color:#374151; }
+.sei-input:focus { outline:none; border-color:var(--crimson); }
+.sei-input.sei-empty { border-color:#fcd34d; background:#fffbeb; }
+.sei-input.sei-bad, .form-input.sei-bad, .d-input.sei-bad { border-color:#ef4444 !important; background:#fef2f2 !important; }
+.mei-show { font-size:11px; color:#374151; font-weight:600; white-space:nowrap; }
+.mei-show.none { color:#b45309; font-weight:400; }
+.sei-msg { font-size:11px; color:#b91c1c; }
+.sei-msg:empty { display:none; }
+.mei-box { display:flex; align-items:center; min-height:34px; padding:0 10px; border:1.5px dashed var(--border); border-radius:7px; font-size:13px; color:#374151; background:#fff; }
+.mei-box.none { color:#94a3b8; font-size:12px; }
+#seiAlertBanner { display:none; background:#fff8f0; border:1.5px solid #f97316; border-radius:8px; margin:8px 12px 0; padding:8px 12px; }
+#seiAlertBanner.has-alert { display:block; }
 .iq-inline-select { font-size:12px; border:1.5px solid #e5e7eb; border-radius:6px; padding:3px 6px; background:#fff; color:#374151; font-family:inherit; cursor:pointer; transition:border-color 0.15s; }
 .iq-inline-select:focus { outline:none; border-color:var(--crimson); }
 .iq-inline-input { font-size:12px; border:1.5px solid #e5e7eb; border-radius:6px; padding:3px 8px; background:#fff; color:#374151; font-family:inherit; transition:border-color 0.15s; }
@@ -804,6 +822,10 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
       <div id="forestaAlertBanner">
         <div class="koma-alert-title">⚠️ フォレスタID未設定の中学生がいます（クリックで詳細へ）</div>
         <div class="koma-alert-list" id="forestaAlertList"></div>
+      </div>
+      <div id="seiAlertBanner">
+        <div class="koma-alert-title">⚠️ 名前の姓・よみが未入力の生徒がいます（クリックで詳細へ）</div>
+        <div class="koma-alert-list" id="seiAlertList"></div>
       </div>
       <div class="filter-bar">
         <div class="filter-row">
@@ -1342,8 +1364,12 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
       <div class="d-section">
         <div class="d-section-title">基本情報</div>
         <div class="d-row">
-          <div class="d-group"><label class="d-label">名前 <span style="color:#ef4444">*</span></label><input class="d-input" type="text" id="dName"></div>
-          <div class="d-group"><label class="d-label">ふりがな</label><input class="d-input" type="text" id="dReading"></div>
+          <div class="d-group"><label class="d-label">名前 <span style="color:#ef4444">*</span></label><input class="d-input" type="text" id="dName" oninput="seiFormSync('d','name')"></div>
+          <div class="d-group"><label class="d-label">ふりがな</label><input class="d-input" type="text" id="dReading" oninput="seiFormSync('d','reading')"></div>
+        </div>
+        <div class="d-row">
+          <div class="d-group"><label class="d-label">姓 ／ 名（自動）</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;"><input class="d-input" type="text" id="dSei" placeholder="姓" oninput="seiFormSync('d','')"><div class="mei-box" id="dMei"></div></div></div>
+          <div class="d-group"><label class="d-label">姓よみ ／ 名よみ（自動）</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;"><input class="d-input" type="text" id="dSeiR" placeholder="姓よみ" oninput="seiFormSync('d','')"><div class="mei-box" id="dMeiR"></div></div></div>
         </div>
         <div class="d-row single">
           <div class="d-group"><label class="d-label">フォレスタID <button type="button" class="help-btn">？<span class="help-tip">映像教材フォレスタの生徒番号。生徒向け系のログインIDに使用。</span></button></label><input class="d-input" type="text" id="dForestaId" placeholder="生徒番号" inputmode="numeric"></div>
@@ -1610,11 +1636,23 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
         <div class="form-group" style="margin:0;">
           <label class="form-label">名前 <span class="req">*</span></label>
-          <input class="form-input" type="text" id="addName" placeholder="例：田中 太郎">
+          <input class="form-input" type="text" id="addName" placeholder="例：田中 太郎" oninput="seiFormSync('add','name')">
         </div>
         <div class="form-group" style="margin:0;">
           <label class="form-label">ふりがな</label>
-          <input class="form-input" type="text" id="addReading" placeholder="たなか たろう">
+          <input class="form-input" type="text" id="addReading" placeholder="たなか たろう" oninput="seiFormSync('add','reading')">
+        </div>
+        <div class="form-group" style="margin:0;">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+            <div><label class="form-label">姓 <span class="req">*</span></label><input class="form-input" type="text" id="addSei" placeholder="田中" oninput="seiFormSync('add','')"></div>
+            <div><label class="form-label">名（自動）</label><div class="mei-box" id="addMei"></div></div>
+          </div>
+        </div>
+        <div class="form-group" style="margin:0;">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+            <div><label class="form-label">姓よみ</label><input class="form-input" type="text" id="addSeiR" placeholder="たなか" oninput="seiFormSync('add','')"></div>
+            <div><label class="form-label">名よみ（自動）</label><div class="mei-box" id="addMeiR"></div></div>
+          </div>
         </div>
         <div class="form-group" style="margin:0;">
           <label class="form-label">性別</label>
@@ -1767,11 +1805,23 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
         <div class="form-group" style="margin:0;">
           <label class="form-label">生徒名</label>
-          <input class="form-input" type="text" id="enrollName" placeholder="山田 太郎">
+          <input class="form-input" type="text" id="enrollName" placeholder="山田 太郎" oninput="seiFormSync('enroll','name')">
         </div>
         <div class="form-group" style="margin:0;">
           <label class="form-label">ふりがな</label>
-          <input class="form-input" type="text" id="enrollReading" placeholder="やまだ たろう">
+          <input class="form-input" type="text" id="enrollReading" placeholder="やまだ たろう" oninput="seiFormSync('enroll','reading')">
+        </div>
+        <div class="form-group" style="margin:0;">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+            <div><label class="form-label">姓 <span class="req">*</span></label><input class="form-input" type="text" id="enrollSei" placeholder="山田" oninput="seiFormSync('enroll','')"></div>
+            <div><label class="form-label">名（自動）</label><div class="mei-box" id="enrollMei"></div></div>
+          </div>
+        </div>
+        <div class="form-group" style="margin:0;">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+            <div><label class="form-label">姓よみ</label><input class="form-input" type="text" id="enrollSeiR" placeholder="やまだ" oninput="seiFormSync('enroll','')"></div>
+            <div><label class="form-label">名よみ（自動）</label><div class="mei-box" id="enrollMeiR"></div></div>
+          </div>
         </div>
         <div class="form-group" style="margin:0;">
           <label class="form-label">学年</label>
@@ -2570,6 +2620,7 @@ function openDetail(idx){
   // 基本情報
   document.getElementById('dName').value=m.name||'';
   document.getElementById('dReading').value=m.reading||'';
+  seiFormSet('d', m.sei, m.seiReading);   // 2026-10-19：姓・姓よみ
   document.getElementById('dBirthdate').value=m.birthdate||'';
   document.getElementById('dGrade').value=m.grade||'';
   document.getElementById('dGender').value=m.gender||'';
@@ -2768,6 +2819,7 @@ function checkKomaRules(members){
 
 function updateKomaAlertBanner(){
   updateForestaAlertBanner(); // 生徒アカウント管理(2026-07-02)：フォレスタID未設定アラートも同タイミングで更新
+  updateSeiAlertBanner();     // 2026-10-19：姓・よみの抜け
   var banner = document.getElementById('komaAlertBanner');
   var list   = document.getElementById('komaAlertList');
   if(!banner || !list) return;
@@ -2857,6 +2909,19 @@ function saveDetail(){
     }
   }
   _fidEl.value = _fid;
+  // 2026-10-19：姓。会員詳細では空でも保存できる（今いる生徒はまだ姓が入っていないため）。
+  //   確かめるのは「名前・ふりがな・姓・姓よみのどれかを変えたとき」だけ。退会確定などが自動で saveDetail を呼ぶので、
+  //   触っていない保存まで止めない（フォレスタIDの確認と同じ考え方）。
+  var _seiTouched = document.getElementById('dName').value.trim() !== (m.name||'')
+    || document.getElementById('dReading').value.trim() !== (m.reading||'')
+    || nameStrip(document.getElementById('dSei').value)  !== (m.sei||'')
+    || nameStrip(document.getElementById('dSeiR').value) !== (m.seiReading||'');
+  if(_seiTouched){
+    var _seiChk = seiFormCheck('d', false);
+    if(_seiChk){ seiFormFail(_seiChk); return; }
+  }
+  m.sei         =nameStrip(document.getElementById('dSei').value);
+  m.seiReading  =nameStrip(document.getElementById('dSeiR').value);
   m.name        =document.getElementById('dName').value.trim();
   m.reading     =document.getElementById('dReading').value.trim();
   m.birthdate   =document.getElementById('dBirthdate').value;
@@ -4906,6 +4971,7 @@ function updateAddYoubi(){
 function openAddModal(){
   document.getElementById('addName').value='';
   document.getElementById('addReading').value='';
+  seiFormSet('add', '', '');   // 2026-10-19
   document.getElementById('addGrade').value='';
   document.getElementById('addGender').value='';
   document.getElementById('addBirthdate').value='';
@@ -4942,12 +5008,17 @@ function closeAddModal(){ document.getElementById('addOverlay').classList.remove
 function saveAdd(){
   var name=(document.getElementById('addName').value||'').trim();
   if(!name){ showToast('名前を入力してください',true); return; }
+  // 2026-10-19：会員を新しく作るときは姓が必須（入会のときと同じ）。姓よみは任意
+  var _addSeiChk = seiFormCheck('add', true);
+  if(_addSeiChk){ seiFormFail(_addSeiChk); return; }
   var attrJuku=document.getElementById('addAttrJuku').checked;
   var attrCa=document.getElementById('addAttrCa').checked;
   if(!attrJuku && !attrCa){ showToast('コースを選択してください',true); return; }
   var m={
     id:genId(), name:name,
     reading:   (document.getElementById('addReading').value||'').trim(),
+    sei:       nameStrip(document.getElementById('addSei').value),
+    seiReading:nameStrip(document.getElementById('addSeiR').value),
     grade:     document.getElementById('addGrade').value,
     gender:    document.getElementById('addGender').value||'',
     birthdate: document.getElementById('addBirthdate').value||'',
@@ -5406,6 +5477,9 @@ function _memberSaveDiffLite(m, chk){
   chkf('CA在籍', m.attrCa?'有':'無', chk.attrCa?'有':'無');
   chkf('塾退会日', m.jukuLeave, chk.jukuLeave);
   chkf('CA退会日', m.caLeave, chk.caLeave);
+  // 2026-10-19：姓。旧GAS（savedCheck に sei が無い）では見ない
+  if(chk.sei !== undefined) chkf('姓', m.sei, chk.sei);
+  if(chk.seiReading !== undefined) chkf('姓よみ', m.seiReading, chk.seiReading);
   var li=(m.interviews||[]).length;
   if(li!==chk.ivCount){
     diff.push('面談記録の件数（この画面:'+li+'件 ／ サーバー:'+chk.ivCount+'件）');
@@ -5425,6 +5499,9 @@ function _memberSaveDiff(m, sv){
   chk('CA在籍', m.attrCa?'有':'無', sv.attrCa?'有':'無');
   chk('塾退会日', m.jukuLeave, sv.jukuLeave);
   chk('CA退会日', m.caLeave, sv.caLeave);
+  // 2026-10-19：姓。旧GAS（応答に sei が無い）では見ない
+  if(sv.sei !== undefined) chk('姓', m.sei, sv.sei);
+  if(sv.seiReading !== undefined) chk('姓よみ', m.seiReading, sv.seiReading);
   // 2026-09-13 追加：面談記録が届いたかを見る。
   //   従来は在籍まわりの5項目しか見ておらず、保存のたびに照合を1往復させているのに
   //   面談記録が入ったかどうかは何も確認していなかった（＝面談記録が落ちても警告が出ない）。
@@ -5728,6 +5805,108 @@ function loadFromCache(){
   return [];
 }
 
+// ===== 姓と名の切れ目（川上さん指示 2026-10-19） =====
+// フルネーム（名前・ふりがな）は今までどおり1つの欄で持つ。姓（sei）と姓のよみ（seiReading）だけを保存し、
+// 名は「フルネームから先頭の姓を除いた残り」で出す（保存しない）。空白（半角・全角）は無視して比べる。
+// 字の種類（漢字・ひらがな）では切らない。切れ目は人が姓の欄に入れる。
+function nameStrip(v){ return String(v||'').replace(/[\s\u3000]/g,''); }
+// 戻り値：姓が空 → ''／名前が姓で始まらない・姓だけで名が残らない → null／それ以外 → 名
+function nameRest(full, sei){
+  full = nameStrip(full); sei = nameStrip(sei);
+  if(!sei) return '';
+  if(full.indexOf(sei) !== 0 || full.length === sei.length) return null;
+  return full.slice(sei.length);
+}
+// 「岡田 真結」のように空白入りで打ったときの、空白の前（姓の候補）
+function nameAutoSei(full){
+  var mt = String(full||'').match(/^[\s\u3000]*([^\s\u3000]+)[\s\u3000]+[^\s\u3000]/);
+  return mt ? mt[1] : '';
+}
+// 姓の欄と名の表示を描き直す。fromName=true（名前・ふりがなの欄を打ったとき）は、姓が空なら空白の前を自動で入れる
+function seiSync(nameId, seiId, meiId, fromName){
+  var n = document.getElementById(nameId), s = document.getElementById(seiId), o = document.getElementById(meiId);
+  if(!n || !s) return '';
+  if(fromName && !nameStrip(s.value)){ var a = nameAutoSei(n.value); if(a) s.value = a; }
+  var empty = !nameStrip(s.value), r = nameRest(n.value, s.value);
+  s.classList.toggle('sei-empty', empty);
+  s.classList.toggle('sei-bad', r === null);
+  if(o){
+    var isBox = o.classList.contains('mei-box');
+    if(empty){ o.textContent = isBox ? '姓を入れると出ます' : '（姓が未入力）'; o.classList.add('none'); }
+    else if(r === null){ o.textContent = isBox ? '名前が姓で始まっていません' : '—'; o.classList.add('none'); }
+    else { o.textContent = r; o.classList.remove('none'); }
+  }
+  return r;
+}
+// 会員登録（enroll）・新規追加（add）・会員詳細（d）の欄：<p>Name / <p>Reading / <p>Sei / <p>Mei / <p>SeiR / <p>MeiR
+function seiFormSync(p, which){
+  seiSync(p+'Name',    p+'Sei',  p+'Mei',  which === 'name');
+  seiSync(p+'Reading', p+'SeiR', p+'MeiR', which === 'reading');
+}
+function seiFormSet(p, sei, seiReading){
+  var a = document.getElementById(p+'Sei'), b = document.getElementById(p+'SeiR');
+  if(a){ a.value = sei || ''; a.classList.remove('sei-bad'); a.style.borderColor = ''; }
+  if(b){ b.value = seiReading || ''; b.classList.remove('sei-bad'); }
+  seiFormSync(p, '');
+}
+// 保存前の確かめ。requireSei=true は会員を作る画面（会員登録・新規追加）。問題があれば {el, msg}、無ければ null
+// 姓よみは必須にしない（川上さん 2026-10-19：よみは任意。抜けは生徒一覧のお知らせで拾う）
+function seiFormCheck(p, requireSei){
+  var g = function(id){ var e = document.getElementById(id); return e ? e.value : ''; };
+  var sei = nameStrip(g(p+'Sei')), seiR = nameStrip(g(p+'SeiR'));
+  if(requireSei && !sei) return { el: p+'Sei', msg: '⚠️ 姓を入力してください' };
+  if(sei && nameRest(g(p+'Name'), sei) === null) return { el: p+'Sei', msg: '⚠️ 名前が「'+sei+'」で始まっていません。姓を確かめてください' };
+  if(seiR && nameRest(g(p+'Reading'), seiR) === null) return { el: p+'SeiR', msg: '⚠️ ふりがなが「'+seiR+'」で始まっていません。姓よみを確かめてください' };
+  return null;
+}
+function seiFormFail(chk){
+  var e = document.getElementById(chk.el);
+  if(e){ e.classList.add('sei-bad'); try{ e.focus(); }catch(_){ } }
+  showToast(chk.msg, true);
+}
+// 問い合わせカード。名前の行とよみの行をそれぞれ切り分ける。which='name'|'reading'|''
+function iqSeiSync(id, which){
+  var a = seiSync('iqe_name_'+id,    'iqe_sei_'+id,  'iqe_mei_'+id,  which === 'name');
+  var b = seiSync('iqe_reading_'+id, 'iqe_seiR_'+id, 'iqe_meiR_'+id, which === 'reading');
+  var msg = [];
+  if(a === null) msg.push('名前が「'+nameStrip((document.getElementById('iqe_sei_'+id)||{}).value)+'」で始まっていません');
+  if(b === null) msg.push('よみが「'+nameStrip((document.getElementById('iqe_seiR_'+id)||{}).value)+'」で始まっていません');
+  var el = document.getElementById('iqe_seimsg_'+id);
+  if(el) el.textContent = msg.length ? msg.join('／')+'。この姓は保存していません' : '';
+}
+
+// ===== 姓・よみの抜けのお知らせ（川上さん指示 2026-10-19） =====
+// 対象：在籍中の生徒。理由＝姓なし／よみなし／姓よみなし／姓が名前と合わない／姓よみがよみと合わない
+// 🚨 フォレスタCSVからの一括取り込みが済むまでは出さない（ほぼ全員が並んで意味をなさないため。川上さん 2026-10-19）。
+//    取り込みが終わったら true にして push する。
+var SEI_ALERT_ON = false;
+function checkSeiMissing(members){
+  return (members||[]).filter(function(m){ return m.status === '在籍'; }).map(function(m){
+    var why = [];
+    if(!nameStrip(m.sei)) why.push('姓なし');
+    else if(nameRest(m.name, m.sei) === null) why.push('姓が名前と合わない');
+    if(!nameStrip(m.reading)) why.push('よみなし');
+    else if(!nameStrip(m.seiReading)) why.push('姓よみなし');
+    else if(nameRest(m.reading, m.seiReading) === null) why.push('姓よみがよみと合わない');
+    return { id: m.id, name: m.name || '（名前未設定）', grade: m.grade || '', reasons: why };
+  }).filter(function(a){ return a.reasons.length; });
+}
+function updateSeiAlertBanner(){
+  var banner = document.getElementById('seiAlertBanner');
+  var list   = document.getElementById('seiAlertList');
+  if(!banner || !list) return;
+  var alerts = SEI_ALERT_ON ? checkSeiMissing(_members||[]) : [];
+  if(alerts.length === 0){ banner.classList.remove('has-alert'); list.innerHTML = ''; return; }
+  banner.classList.add('has-alert');
+  list.innerHTML = alerts.map(function(a){
+    var idx = (_members||[]).findIndex(function(m){ return m.id === a.id; });
+    return '<span class="koma-alert-chip" onclick="openDetail('+idx+')">'
+      + esc(a.name) + (a.grade ? '（'+esc(a.grade)+'）' : '')
+      + '<span class="koma-alert-reason">' + esc(a.reasons.join(' / ')) + '</span>'
+      + '</span>';
+  }).join('');
+}
+
 function normalizeStudent(m){
   if(!m) return {};
   return {
@@ -5739,6 +5918,7 @@ function normalizeStudent(m){
     memo:m.memo||'', club:m.club||'', policyMemo:m.policyMemo||'',
     policyMemoAt:m.policyMemoAt||'',           // 2026-09-20：ここに無いと読み直しで落ちる
     enrollRoute:m.enrollRoute||'',             // 2026-09-20：入会経路。ホワイトリストから漏れていた
+    sei:m.sei||'', seiReading:m.seiReading||'', // 2026-10-19：姓と姓のよみ。ここに無いと読み直しで落ちる
     attrJuku:!!m.attrJuku, attrCa:!!m.attrCa,
     jukuEnroll:m.jukuEnroll||'', jukuLeave:m.jukuLeave||'',
     caEnroll:m.caEnroll||'', caLeave:m.caLeave||'',
@@ -8537,6 +8717,7 @@ function renderInquiry(){
   list.forEach(function(iq){
     populateCombo('iqe_school_'+iq.id, KEY_SCHOOL, iq.school||'', gradeToType(iq.grade||''), '新しい学校を追加');
     populateCombo('iqe_target_'+iq.id, KEY_TARGET, iq.targetSchool||'', gradeToTargetType(iq.grade||''), '新しい志望校を追加');
+    iqSeiSync(iq.id, '');   // 2026-10-19：名・名よみの表示（要素がDOMに入ってから）
   });
 }
 
@@ -8663,8 +8844,23 @@ function buildIqCard(iq){
 
     /* ── 上段: 基本情報 ── */
     +'<div class="iq-top">'
+    /* 2026-10-19 川上さん指示：名前の行とよみの行をそろえ、それぞれの横で姓を切り分ける。
+       名・名よみは「フルネームから先頭の姓を除いた残り」を表示するだけで保存しない */
+    +'<div style="display:flex;gap:14px;align-items:flex-start;">'
+    +'<div class="iq-namegrid">'
+    +'<input class="iq-name-input" id="iqe_name_'+iq.id+'" value="'+esc(iq.name||'')+'" placeholder="生徒名" oninput="iqSeiSync(\''+iq.id+'\',\'name\')" onblur="saveIqCardAuto(this)">'
+    +'<span class="sei-lbl">姓</span><input class="sei-input" id="iqe_sei_'+iq.id+'" value="'+esc(iq.sei||'')+'" placeholder="未入力" oninput="iqSeiSync(\''+iq.id+'\',\'\')" onblur="saveIqCardAuto(this)">'
+    +'<span class="sei-lbl">名</span><span class="mei-show" id="iqe_mei_'+iq.id+'"></span>'
+    +'<div class="iq-rd-wrap">'
+    +'<span style="color:#f59e0b;font-size:11px;font-weight:700;" title="読みにくい名前の場合は入力してください">よみ</span>'
+    +'<input class="iq-inline-input" id="iqe_reading_'+iq.id+'" value="'+esc(iq.reading||'')+'" placeholder="読みにくい場合は入力" oninput="iqSeiSync(\''+iq.id+'\',\'reading\')" onblur="saveIqCardAuto(this)" >'
+    +'</div>'
+    +'<span class="sei-lbl">姓</span><input class="sei-input" id="iqe_seiR_'+iq.id+'" value="'+esc(iq.seiReading||'')+'" placeholder="未入力" oninput="iqSeiSync(\''+iq.id+'\',\'\')" onblur="saveIqCardAuto(this)">'
+    +'<span class="sei-lbl">名</span><span class="mei-show" id="iqe_meiR_'+iq.id+'"></span>'
+    +'<div class="sei-msg" id="iqe_seimsg_'+iq.id+'" style="grid-column:1 / -1;"></div>'
+    +'</div>'
+    +'<div style="flex:1;display:flex;flex-direction:column;gap:8px;min-width:0;">'
     +'<div class="iq-top-row1">'
-    +'<input class="iq-name-input" id="iqe_name_'+iq.id+'" value="'+esc(iq.name||'')+'" placeholder="生徒名" onblur="saveIqCardAuto(this)">'
     +'<input type="date" class="iq-inline-input" id="iqe_date_'+iq.id+'" value="'+esc(iq.date||'')+'" title="問い合わせ日" onchange="saveIqCardAuto(this)" style="font-size:11px;padding:3px 6px;color:#9ca3af;">'
     +'<select class="iq-inline-select" id="iqe_grade_'+iq.id+'" onchange="saveIqCardAuto(this)">'+gradeOpts+'</select>'
     + clsChipsHtml(iq.id, iq.classroom)
@@ -8674,8 +8870,6 @@ function buildIqCard(iq){
     +'<span id="iqstate_'+iq.id+'" style="margin-left:auto;display:inline-flex;align-items:center;gap:4px;">'+iqStateHtml(iq.id)+'</span>'
     +'</div>'
     +'<div class="iq-top-row2">'
-    +'<span style="color:#f59e0b;font-size:11px;font-weight:700;" title="読みにくい名前の場合は入力してください">よみ</span>'
-    +'<input class="iq-inline-input" id="iqe_reading_'+iq.id+'" value="'+esc(iq.reading||'')+'" placeholder="読みにくい場合は入力" onblur="saveIqCardAuto(this)" style="width:160px;">'
     +'<span style="color:#9ca3af;font-size:13px;">👤</span>'
     +'<input class="iq-inline-input" id="iqe_parent_'+iq.id+'" value="'+esc(iq.parent||'')+'" placeholder="保護者名" onblur="saveIqCardAuto(this)" style="width:110px;">'
     +'<span style="color:#9ca3af;font-size:13px;">📞</span>'
@@ -8683,6 +8877,8 @@ function buildIqCard(iq){
     +'<select class="iq-inline-select" id="iqe_route_'+iq.id+'" onchange="saveIqCardAuto(this)">'+routeOpts+'</select>'
     +'<span style="color:#9ca3af;font-size:13px;" title="メールアドレス">✉</span>'
     +'<input class="iq-inline-input" id="iqe_email_'+iq.id+'" value="'+esc(iq.email||'')+'" placeholder="メールアドレス" onblur="saveIqCardAuto(this)" style="flex:1;min-width:170px;">'
+    +'</div>'
+    +'</div>'
     +'</div>'
     /* 3行目（2026-09-21 モック承認）：生年月日・性別・学校・志望校・部活・指導方針。
        学校と志望校の中身は renderInquiry のあとに populateCombo で入れる（マスターと同じ仕組み） */
@@ -10276,6 +10472,10 @@ function saveIqCard(id, skipRender){
   var wasEnrolled = iq.enrolledToMember;
   iq.name      = (document.getElementById('iqe_name_'+id).value||'').trim();
   iq.reading   = (document.getElementById('iqe_reading_'+id) ? document.getElementById('iqe_reading_'+id).value : '') || '';
+  // 2026-10-19 川上さん指示：姓。名前（よみ）の頭と合わないときは姓だけ保存しない（前の値のまま）。ほかの欄は保存する
+  var _iqSeiEl = document.getElementById('iqe_sei_'+id), _iqSeiREl = document.getElementById('iqe_seiR_'+id);
+  if(_iqSeiEl){ var _iqS = nameStrip(_iqSeiEl.value); if(nameRest(iq.name, _iqS) !== null) iq.sei = _iqS; }
+  if(_iqSeiREl){ var _iqSR = nameStrip(_iqSeiREl.value); if(nameRest(iq.reading, _iqSR) !== null) iq.seiReading = _iqSR; }
   iq.grade     = document.getElementById('iqe_grade_'+id).value;
   iq.classroom = document.getElementById('iqe_classroom_'+id).value;
   iq.parent    = (document.getElementById('iqe_parent_'+id).value||'').trim();
@@ -10462,6 +10662,7 @@ function openEnrollPopup(iq){
   // 問い合わせ情報を引き継ぎ
   document.getElementById('enrollName').value       = iq.name||'';
   document.getElementById('enrollReading').value    = iq.reading||'';
+  seiFormSet('enroll', iq.sei, iq.seiReading);   // 2026-10-19：問い合わせで入れた姓をそのまま写す
   document.getElementById('enrollParent').value     = iq.parent||'';
   document.getElementById('enrollContact').value    = iq.contact||'';
   // 2026-09-20：問い合わせカードで埋めた項目をそのまま持ってくる。
@@ -10597,6 +10798,7 @@ function enrollMergeSelect(memberId){
   // 【バグ修正 2026-07-06d 川上さん報告】入力済みの値を上書きしない（空欄のみ補完）。統合クリック前にモーダルへ入力した内容が消えていた
   var set = function(id, v){ var el = document.getElementById(id); if(el && v && !el.value) el.value = v; };
   set('enrollName', m.name); set('enrollReading', m.reading); set('enrollGrade', m.grade);
+  set('enrollSei', m.sei); set('enrollSeiR', m.seiReading); seiFormSync('enroll', '');   // 2026-10-19
   set('enrollGender', m.gender); set('enrollParent', m.parent); set('enrollContact', m.contact || m.phone);
   var _egS=document.getElementById('enrollGrade'); var _egV=_egS?_egS.value:'';
   var _ss=document.getElementById('enrollSchool'); if(_ss && !_ss.value && m.school){ populateCombo('enrollSchool', KEY_SCHOOL, m.school, gradeToType(_egV), '新しい学校を追加'); }
@@ -10697,6 +10899,8 @@ function confirmEnrollMergeProceed(iq){
   // モーダル表示項目のみ上書き
   m.name = val('enrollName') || m.name;
   m.reading = val('enrollReading');
+  m.sei = nameStrip(val('enrollSei'));          // 2026-10-19
+  m.seiReading = nameStrip(val('enrollSeiR'));
   m.grade = document.getElementById('enrollGrade').value || m.grade;
   m.gender = document.getElementById('enrollGender').value || m.gender || '';
   m.parent = val('enrollParent');
@@ -10873,6 +11077,9 @@ function confirmEnroll(){
     document.getElementById('enrollName').focus();
     showToast('⚠️ 生徒名を入力してください', true); return;
   }
+  // 川上さん指示(2026-10-19)：入会のとき姓は必須。名前の頭と合わない姓も通さない。姓よみは任意
+  var _vSeiChk = seiFormCheck('enroll', true);
+  if(_vSeiChk){ seiFormFail(_vSeiChk); return; }
   if(!_vGrade){
     document.getElementById('enrollGrade').style.borderColor='var(--crimson)';
     document.getElementById('enrollGrade').focus();
@@ -10930,6 +11137,8 @@ function confirmEnrollProceed(){
     id: genId(),
     name:         (document.getElementById('enrollName').value||iq.name||'').trim(),
     reading:      (document.getElementById('enrollReading').value||'').trim(),
+    sei:          nameStrip(document.getElementById('enrollSei').value),      // 2026-10-19
+    seiReading:   nameStrip(document.getElementById('enrollSeiR').value),
     grade:        document.getElementById('enrollGrade').value||iq.grade||'',
     status: '在籍',
     classroom:    document.getElementById('enrollClassroom').value||iq.classroom||'',
