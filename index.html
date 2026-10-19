@@ -596,6 +596,9 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
 .sei-msg:empty { display:none; }
 .mei-box { display:flex; align-items:center; min-height:34px; padding:0 10px; border:1.5px dashed var(--border); border-radius:7px; font-size:13px; color:#374151; background:#fff; }
 .mei-box.none { color:#94a3b8; font-size:12px; }
+.sei-grid { display:grid; grid-template-columns:minmax(0,1fr) 120px 140px; column-gap:8px; row-gap:4px; align-items:center; }
+.sei-grid > label { margin:0; }
+.sei-grid > label:nth-of-type(n+4) { margin-top:6px; }
 #seiAlertBanner { display:none; background:#fff8f0; border:1.5px solid #f97316; border-radius:8px; margin:8px 12px 0; padding:8px 12px; }
 #seiAlertBanner.has-alert { display:block; }
 .iq-inline-select { font-size:12px; border:1.5px solid #e5e7eb; border-radius:6px; padding:3px 6px; background:#fff; color:#374151; font-family:inherit; cursor:pointer; transition:border-color 0.15s; }
@@ -1363,14 +1366,19 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
     <div class="detail-tab-panel active" id="dtBasic">
       <div class="d-section">
         <div class="d-section-title">基本情報</div>
-        <div class="d-row">
-          <div class="d-group"><label class="d-label">名前 <span style="color:#ef4444">*</span></label><input class="d-input" type="text" id="dName" oninput="seiFormSync('d','name')"></div>
-          <div class="d-group"><label class="d-label">ふりがな</label><input class="d-input" type="text" id="dReading" oninput="seiFormSync('d','reading')"></div>
-        </div>
-        <div class="d-row">
-          <div class="d-group"><label class="d-label">姓 ／ 名（自動）</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;"><input class="d-input" type="text" id="dSei" placeholder="姓" oninput="seiFormSync('d','')"><div class="mei-box" id="dMei"></div></div></div>
-          <div class="d-group"><label class="d-label">姓よみ ／ 名よみ（自動）</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;"><input class="d-input" type="text" id="dSeiR" placeholder="姓よみ" oninput="seiFormSync('d','')"><div class="mei-box" id="dMeiR"></div></div></div>
-        </div>
+        <div class="d-row single"><div class="d-group">
+          <!-- 2026-10-20 川上さん指示：問い合わせカードと同じ並び。名前の下にふりがな、それぞれの右で姓を切り分ける -->
+          <div class="sei-grid">
+            <label class="d-label">名前 <span style="color:#ef4444">*</span></label><label class="d-label">姓</label><label class="d-label">名（自動）</label>
+            <input class="d-input" type="text" id="dName" placeholder="" oninput="seiFormSync('d','name')">
+            <input class="d-input" type="text" id="dSei" placeholder="姓" oninput="seiFormSync('d','')">
+            <div class="mei-box" id="dMei"></div>
+            <label class="d-label">ふりがな</label><label class="d-label">姓よみ</label><label class="d-label">名よみ（自動）</label>
+            <input class="d-input" type="text" id="dReading" placeholder="" oninput="seiFormSync('d','reading')">
+            <input class="d-input" type="text" id="dSeiR" placeholder="姓よみ" oninput="seiFormSync('d','')">
+            <div class="mei-box" id="dMeiR"></div>
+          </div>
+        </div></div>
         <div class="d-row single">
           <div class="d-group"><label class="d-label">フォレスタID <button type="button" class="help-btn">？<span class="help-tip">映像教材フォレスタの生徒番号。生徒向け系のログインIDに使用。</span></button></label><input class="d-input" type="text" id="dForestaId" placeholder="生徒番号" inputmode="numeric"></div>
         </div>
@@ -1634,24 +1642,17 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
     <div class="modal-body" style="display:flex;flex-direction:column;gap:10px;">
       <div class="enroll-section-title">基本情報</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-        <div class="form-group" style="margin:0;">
-          <label class="form-label">名前 <span class="req">*</span></label>
-          <input class="form-input" type="text" id="addName" placeholder="例：田中 太郎" oninput="seiFormSync('add','name')">
-        </div>
-        <div class="form-group" style="margin:0;">
-          <label class="form-label">ふりがな</label>
-          <input class="form-input" type="text" id="addReading" placeholder="たなか たろう" oninput="seiFormSync('add','reading')">
-        </div>
-        <div class="form-group" style="margin:0;">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-            <div><label class="form-label">姓 <span class="req">*</span></label><input class="form-input" type="text" id="addSei" placeholder="田中" oninput="seiFormSync('add','')"></div>
-            <div><label class="form-label">名（自動）</label><div class="mei-box" id="addMei"></div></div>
-          </div>
-        </div>
-        <div class="form-group" style="margin:0;">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-            <div><label class="form-label">姓よみ</label><input class="form-input" type="text" id="addSeiR" placeholder="たなか" oninput="seiFormSync('add','')"></div>
-            <div><label class="form-label">名よみ（自動）</label><div class="mei-box" id="addMeiR"></div></div>
+        <div class="form-group" style="margin:0;grid-column:1 / -1;">
+          <!-- 2026-10-20 川上さん指示：問い合わせカードと同じ並び。名前の下にふりがな、それぞれの右で姓を切り分ける -->
+          <div class="sei-grid">
+            <label class="form-label">名前 <span class="req">*</span></label><label class="form-label">姓 <span class="req">*</span></label><label class="form-label">名（自動）</label>
+            <input class="form-input" type="text" id="addName" placeholder="例：田中 太郎" oninput="seiFormSync('add','name')">
+            <input class="form-input" type="text" id="addSei" placeholder="田中" oninput="seiFormSync('add','')">
+            <div class="mei-box" id="addMei"></div>
+            <label class="form-label">ふりがな</label><label class="form-label">姓よみ</label><label class="form-label">名よみ（自動）</label>
+            <input class="form-input" type="text" id="addReading" placeholder="たなか たろう" oninput="seiFormSync('add','reading')">
+            <input class="form-input" type="text" id="addSeiR" placeholder="たなか" oninput="seiFormSync('add','')">
+            <div class="mei-box" id="addMeiR"></div>
           </div>
         </div>
         <div class="form-group" style="margin:0;">
@@ -1803,24 +1804,17 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
 
       <div class="enroll-section-title">基本情報</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-        <div class="form-group" style="margin:0;">
-          <label class="form-label">生徒名</label>
-          <input class="form-input" type="text" id="enrollName" placeholder="山田 太郎" oninput="seiFormSync('enroll','name')">
-        </div>
-        <div class="form-group" style="margin:0;">
-          <label class="form-label">ふりがな</label>
-          <input class="form-input" type="text" id="enrollReading" placeholder="やまだ たろう" oninput="seiFormSync('enroll','reading')">
-        </div>
-        <div class="form-group" style="margin:0;">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-            <div><label class="form-label">姓 <span class="req">*</span></label><input class="form-input" type="text" id="enrollSei" placeholder="山田" oninput="seiFormSync('enroll','')"></div>
-            <div><label class="form-label">名（自動）</label><div class="mei-box" id="enrollMei"></div></div>
-          </div>
-        </div>
-        <div class="form-group" style="margin:0;">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-            <div><label class="form-label">姓よみ</label><input class="form-input" type="text" id="enrollSeiR" placeholder="やまだ" oninput="seiFormSync('enroll','')"></div>
-            <div><label class="form-label">名よみ（自動）</label><div class="mei-box" id="enrollMeiR"></div></div>
+        <div class="form-group" style="margin:0;grid-column:1 / -1;">
+          <!-- 2026-10-20 川上さん指示：問い合わせカードと同じ並び。名前の下にふりがな、それぞれの右で姓を切り分ける -->
+          <div class="sei-grid">
+            <label class="form-label">生徒名</label><label class="form-label">姓 <span class="req">*</span></label><label class="form-label">名（自動）</label>
+            <input class="form-input" type="text" id="enrollName" placeholder="山田 太郎" oninput="seiFormSync('enroll','name')">
+            <input class="form-input" type="text" id="enrollSei" placeholder="山田" oninput="seiFormSync('enroll','')">
+            <div class="mei-box" id="enrollMei"></div>
+            <label class="form-label">ふりがな</label><label class="form-label">姓よみ</label><label class="form-label">名よみ（自動）</label>
+            <input class="form-input" type="text" id="enrollReading" placeholder="やまだ たろう" oninput="seiFormSync('enroll','reading')">
+            <input class="form-input" type="text" id="enrollSeiR" placeholder="やまだ" oninput="seiFormSync('enroll','')">
+            <div class="mei-box" id="enrollMeiR"></div>
           </div>
         </div>
         <div class="form-group" style="margin:0;">
