@@ -6086,6 +6086,20 @@ function onKomaSelectChange(sel){
 }
 
 // コマIDから開始時刻文字列を取得（HH:MM形式）
+// 2026-10-30：コマidから「17:15〜18:35」を返す（Class Board の体験生表示用）。見つからなければ空
+function getKomaFullTime(komaId){
+  var allDefs = [KOMA_DEF, CA_KOMA_DEF];
+  for(var i=0; i<allDefs.length; i++){
+    var keys = Object.keys(allDefs[i]);
+    for(var j=0; j<keys.length; j++){
+      var found = (allDefs[i][keys[j]]||[]).find(function(d){ return d.id===komaId; });
+      if(found) return found.time;
+    }
+  }
+  var sat = SAT_KOMA_DEF.find(function(d){ return d.id===komaId; });
+  return (sat && sat.time) ? sat.time : '';
+}
+
 function getKomaStartTime(komaId){
   var allDefs = [KOMA_DEF, CA_KOMA_DEF];
   for(var i=0; i<allDefs.length; i++){
@@ -10235,8 +10249,12 @@ function fireIqTaskTrigger(trigger, apoDtStr, apoTimeStr, classroom, studentName
       leave:         { category: '問い合わせ対応', taskType: '授業外' }
     };
     var _triggerMeta = _IQ_TRIGGER_MAP[trigger] || { category: '問い合わせ対応', taskType: '授業外' };
+    // 川上さん確定(2026-10-30)：体験の当日タスク（体験①・体験②＝アポ当日 otype 'apo'）だけ「授業内」。
+    //   授業の中で行うので、Class Board の授業内に出す。体験準備（ready）は授業外のまま。
+    //   ★trial_ready 全体を授業内にしないこと（準備は授業の前にやる作業）。
+    var _taskTypeFinal = (trigger === 'trial_ready' && otype === 'apo') ? '授業内' : _triggerMeta.taskType;
     var _fullMemo = [readingMemo, tmpl.memo, extraMemo].filter(Boolean).join('\n');
-    if(url) postTaskToManager(title, _fullMemo, due, _triggerMeta.category, trigger, typeof newIqId!=='undefined'?newIqId:null, studentName, classroom||'', _triggerMeta.taskType);
+    if(url) postTaskToManager(title, _fullMemo, due, _triggerMeta.category, trigger, typeof newIqId!=='undefined'?newIqId:null, studentName, classroom||'', _taskTypeFinal);
   });
 }
 
@@ -10451,6 +10469,8 @@ function saveIqCard(id, skipRender){
       date: document.getElementById('iqe_tdate_'+id+'_'+i).value,
       koma: (document.getElementById('iqe_tkoma_'+id+'_'+i) ? document.getElementById('iqe_tkoma_'+id+'_'+i).value : ''),
       time: (function(){ var ko=document.getElementById('iqe_tkoma_'+id+'_'+i); if(ko&&ko.value) return getKomaStartTime(ko.value); var th=document.getElementById('iqe_ttime_'+id+'_'+i); return th?th.value:''; })(),
+      // 2026-10-30：コマの時刻を「17:15〜18:35」の形でも残す。Class Board が体験生を時間割のコマに置くときに使う
+      komaTime: (function(){ var ko=document.getElementById('iqe_tkoma_'+id+'_'+i); return (ko&&ko.value) ? getKomaFullTime(ko.value) : ''; })(),
       subject: document.getElementById('iqe_tsubject_'+id+'_'+i) ? document.getElementById('iqe_tsubject_'+id+'_'+i).value : '',
       note: document.getElementById('iqe_tnote_'+id+'_'+i) ? document.getElementById('iqe_tnote_'+id+'_'+i).value : ''
     });
