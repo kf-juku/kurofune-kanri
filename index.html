@@ -6395,7 +6395,13 @@ function jsKindLabel_(r){
 }
 function jsRender(m){
   var wrap = document.getElementById('jsList'); if(!wrap || !m) return;
-  var rows = jsRowsOf_(m);
+  // 2026-11-09 川上さん「期限が過ぎたやつはもうどこにも表示しないでいい」：過ぎた「この日だけ」「来ない日」と、期限切れの毎週は出さない
+  //   （Class Board の自習タブ jxRowsOfStu_ と同じ。データは消さない。上の「サーバーと同じ（N件）」は全件のまま数える）
+  var _td = (function(){ var d = new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); })();
+  var rows = jsRowsOf_(m).filter(function(r){
+    if(r.kind === 'weekly') return !r.validTo || r.validTo >= _td;
+    return !r.date || r.date >= _td;
+  });
   if(_jsRows === null){ wrap.innerHTML = '<div style="font-size:12px;color:#94a3b8;">読み込み中…</div>'; return; }
   if(!rows.length){ wrap.innerHTML = '<div style="font-size:12px;color:#94a3b8;">自習の登録はありません</div>'; return; }
   // 2026-10-09：曜日（月→日）→時刻の順に並べる。以前は曜日を文字コード順で比べていて
