@@ -1511,8 +1511,6 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
           <div class="koma-legend-item"><div class="koma-legend-dot" style="background:var(--crimson);"></div>対面</div>
           <div class="koma-legend-item"><span style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:14px;border-radius:4px;background:#2D8CFF"><svg width="10" height="10" viewBox="0 0 24 24" fill="white"><path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11l-4 4z"/></svg></span>Zoom（オンライン）</div>
         </div>
-        <!-- 土曜授業セクション廃止済み（v2.22〜）：KOMA_DEFに統合 -->
-        <div id="komaOptSatWrap" style="display:none;"></div>
         <div id="komaCaWrap"></div>
       </div>
 
@@ -1521,7 +1519,9 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
         <div class="d-section-title">🪑 自習（いつ来るか）</div>
         <div id="jsState" style="font-size:12px;font-weight:700;margin-bottom:6px;color:#94a3b8;"></div>
         <div id="jsList"></div>
-        <div id="jsAdd" style="margin-top:8px;padding:8px;border:1px dashed #cbd5e1;border-radius:8px;background:#f8fafc;">
+        <!-- 2026-11-08 川上さん確定：自習を入れる・変える・消すのは Class Board の「自習」タブだけ。ここは見るだけ（隔週・日付ごとのコマを二重に作らないため） -->
+        <div style="margin-top:6px;font-size:11.5px;color:#64748b;">入れる・変える・消すのは Class Board の「自習」タブから</div>
+        <div id="jsAdd" style="display:none;margin-top:8px;padding:8px;border:1px dashed #cbd5e1;border-radius:8px;background:#f8fafc;">
           <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:12px;">
             <select class="form-select" id="jsCr" style="width:auto;" onchange="jsFillKoma()"></select>
             <select class="form-select" id="jsKoma" style="width:auto;"></select>
@@ -1917,8 +1917,6 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
       <div class="form-group" style="margin:4px 0 0;">
         <label class="form-label">受講コマ</label>
         <div id="enrollKomaWrap" style="margin-top:4px;font-size:12px;color:#9ca3af;">教室を選択すると表示されます</div>
-      <!-- enrollSatKomaGroup廃止済み（v2.22〜）：enrollKomaWrapのKOMA_DEFに土曜コマ統合 -->
-      <div id="enrollSatKomaGroup" style="display:none;"><div id="enrollSatKomaWrap"></div></div>
       </div>
     </div>
     <div class="modal-foot">
@@ -2771,11 +2769,7 @@ function checkKomaRules(members){
       }
       if(isChugaku){
         var hasSat = komas.some(function(k){
-          if(k.satType === 'enshuu') return true;
-          // 旧形式互換
-          if(k.satType === 'sat') return true;
-          if(k.satType === 'hira') return !!(k.hiraKoma && k.hiraKoma.trim());
-          return false;
+          return k.satType === 'enshuu';
         });
         if(!hasSat){
           reasons.push('演習回が未設定（中学生は必須）');
@@ -5923,8 +5917,6 @@ function normalizeStudent(m){
       var oldSat = m.satOptions || [];
       var satMap = {
         'eiken': {id:'sat_eiken', youbi:'土', time:'16:20〜17:10', satType:'eiken'},
-        'sat1':  {id:'sat_sat1',  youbi:'土', time:'17:15〜18:35', satType:'sat'},
-        'sat2':  {id:'sat_sat2',  youbi:'土', time:'18:40〜20:00', satType:'sat'},
         'juken': {id:'sat_juken', youbi:'土', time:'19:00〜21:30', satType:'juken'}
       };
       oldSat.forEach(function(s){
@@ -6010,7 +6002,7 @@ function buildKomaSelect(id, currentVal, classroom, style, youbiFilter, extraOnc
     var grpLabel = yf ? '塾' : '塾 ('+(cls||'全教室')+')';
     opts += '<optgroup label="'+grpLabel+'">';
     jukuFiltered.forEach(function(d){
-      var sel = (d.id===currentVal||d.time===currentVal)?'selected':'';
+      var sel = (currentVal && (d.id===currentVal||d.time===currentVal))?'selected':''; // 2026-11-08：空のとき時刻が空のコマ（旧 sat_hira）が選ばれていた
       opts += '<option value="'+d.id+'" data-time="'+d.time.split('〜')[0]+'" '+sel+'>'+d.youbi+' '+d.time+'</option>';
     });
     opts += '</optgroup>';
@@ -6019,7 +6011,7 @@ function buildKomaSelect(id, currentVal, classroom, style, youbiFilter, extraOnc
     var grpLabel2 = yf ? 'CA' : 'CA ('+(cls||'全教室')+')';
     opts += '<optgroup label="'+grpLabel2+'">';
     caFiltered.forEach(function(d){
-      var sel = (d.id===currentVal||d.time===currentVal)?'selected':'';
+      var sel = (currentVal && (d.id===currentVal||d.time===currentVal))?'selected':''; // 2026-11-08：空のとき時刻が空のコマ（旧 sat_hira）が選ばれていた
       opts += '<option value="'+d.id+'" data-time="'+d.time.split('〜')[0]+'" '+sel+'>'+d.youbi+' '+d.time+'</option>';
     });
     opts += '</optgroup>';
@@ -6027,7 +6019,7 @@ function buildKomaSelect(id, currentVal, classroom, style, youbiFilter, extraOnc
   if(satFiltered.length){
     opts += '<optgroup label="土曜">';
     satFiltered.forEach(function(d){
-      var sel = (d.id===currentVal||d.time===currentVal)?'selected':'';
+      var sel = (currentVal && (d.id===currentVal||d.time===currentVal))?'selected':''; // 2026-11-08：空のとき時刻が空のコマ（旧 sat_hira）が選ばれていた
       opts += '<option value="'+d.id+'" data-time="'+d.time.split('〜')[0]+'" '+sel+'>'+d.youbi+' '+d.time+' ('+d.label+')</option>';
     });
     opts += '</optgroup>';
@@ -6172,12 +6164,10 @@ var CA_KOMA_DEF = {
   ]
 };
 // 土曜コマ定義（塾の土曜授業）— komasに統合管理
-// satType: 'eiken' | 'sat' | 'juken' で種別を識別
+// satType: 'eiken' | 'juken' で種別を識別（演習回 enshuu は KOMA_DEF 側）
+// 【廃止済み 2026-06-13】平日振替（satType:'hira'）・土曜演習（satType:'sat'）は演習回（enshuu）に1本化（v2.22）。2026-11-08 本番の在籍・退会113人で0件を確かめて古い分岐を消した（_作り方標準 決まりの核10）
 var SAT_KOMA_DEF = [
   {id:'sat_eiken', youbi:'土', time:'16:20〜17:10', satType:'eiken', label:'英検対策'},
-  {id:'sat_sat1',  youbi:'土', time:'17:15〜18:35', satType:'sat',   label:'土曜演習①'},
-  {id:'sat_sat2',  youbi:'土', time:'18:40〜20:00', satType:'sat',   label:'土曜演習②'},
-  {id:'sat_hira',  youbi:'',  time:'',              satType:'hira',  label:'平日演習回'},
   {id:'sat_juken', youbi:'土', time:'19:00〜21:30', satType:'juken', label:'受験特訓'},
 ];
 
@@ -6236,17 +6226,11 @@ function buildKomaTableHtml(defMap, komas, disabled, simpleMode, idPrefix, homeC
         if(!def){ col += '<td style="background:#f9fafb;"></td>'; return; }
         var isSat = !!def.satType;
         var existing = komas.find(function(k){ return k.id===def.id; });
-        // enshuu判定：既存データにsatType:hira/satも受容（classroom一致必須）
+        // enshuu判定（classroom一致必須）
         if(!existing && def.satType === 'enshuu'){
           existing = komas.find(function(k){
-            // classroom不一致は除外
             if(k.classroom && k.classroom !== cls) return false;
-            if(k.satType === 'enshuu' && k.youbi === def.youbi && k.time === def.time) return true;
-            // 旧形式互換：sat+同じ時間帯
-            if(k.satType === 'sat' && k.youbi === '土' && k.time === def.time) return true;
-            // 旧形式互換：hira（平日演習回） - 同じ教室・曜日・時刻で一致
-            if(k.satType === 'hira') return false; // 平日コマは別判定
-            return false;
+            return k.satType === 'enshuu' && k.youbi === def.youbi && k.time === def.time;
           });
         }
         // 旧形式互換：英検・受験特訓（川上さん指示 2026-08-29）
@@ -6278,15 +6262,6 @@ function buildKomaTableHtml(defMap, komas, disabled, simpleMode, idPrefix, homeC
           var existEn = komas.find(function(k){
             return k.satType === 'enshuu' && k.youbi === def.youbi && k.time === def.time && k.classroom === cls;
           });
-          // 旧形式hira互換：hiraKomaが一致するものをenshuu扱い
-          if(!existEn){
-            existEn = komas.find(function(k){
-              if(k.satType !== 'hira') return false;
-              var hv = k.hiraKoma || '';
-              if(hv.indexOf('_') !== -1){ hv = hv.split('_').slice(1).join('_'); }
-              return hv === (def.youbi + def.time);
-            });
-          }
           var isOnline  = !disabled && existing && existing.online;
           var isEnshuu  = !disabled && !!existEn && !existEn.online;
           var isNormal  = !disabled && !!existing && !existing.online && !existEn;
@@ -6411,6 +6386,8 @@ function jsMemoShown_(m){
   return t;
 }
 function jsKindLabel_(r){
+  // 2026-11-08：隔週（everyWeeks='2'）。開始日の週から1週おき
+  if(r.kind === 'weekly' && String(r.everyWeeks||'') === '2') return '隔週 ' + esc(r.youbi||'') + '曜' + (r.validFrom ? '（' + esc(r.validFrom) + 'から）' : '');
   if(r.kind === 'weekly') return '毎週 ' + esc(r.youbi||'') + '曜';
   if(r.kind === 'single') return esc(r.date||'') + ' だけ';
   if(r.kind === 'off')    return esc(r.date||'') + ' は来ない';
@@ -6449,7 +6426,7 @@ function jsRender(m){
           +'<td style="padding:5px 6px;white-space:nowrap;">'+esc(r.komaTime||'')+'</td>'
           +'<td style="padding:5px 6px;white-space:nowrap;color:#94a3b8;">'+lim+'</td>'
           +'<td style="padding:5px 6px;color:#334155;">'+esc(jsMemoShown_(r.memo))+'</td>'
-          +'<td style="padding:5px 6px;text-align:right;"><button onclick="jsDelRow(\''+esc(r.id)+'\')" style="border:1px solid #fecaca;background:#fff;color:#b91c1c;border-radius:6px;padding:2px 8px;font-size:11px;cursor:pointer;">削除</button></td>'
+          // 2026-11-08：削除ボタンは出さない（Class Board の「自習」タブで消す）
           +'</tr>';
       }).join('')
     + '</table>';
@@ -6573,10 +6550,6 @@ function renderKomaTable(m){
     caWrap.innerHTML = caHtml;
     attachKomaRadioToggle(caWrap);
   }
-  // 土曜授業セクションを非表示（KOMA_DEFに統合）
-  var satWrap = document.getElementById('komaOptSatWrap');
-  var satTitle = document.querySelector('.d-section-title[data-sat]');
-  if(satWrap){ satWrap.style.display = 'none'; }
 }
 
 function refreshKomaTableDisabled(){
@@ -6654,226 +6627,8 @@ function getKomasFromUI(){
   return komas;
 }
 
-// 土曜コマUIを描画（教室別2セクション：北久里浜・久里浜）
-// 各教室に英検・土曜演習①②・平日演習回・受験特訓を表示
-// hiraKoma（平日演習回）の形式：「教室_曜日時刻」例: 北久里浜_月17:15〜18:35
-function renderSatKomaUI(komas, classroom, wrapId){
-  var wrap = document.getElementById(wrapId || 'komaOptSatWrap');
-  if(!wrap) return;
-  wrap.innerHTML = '';
-
-  var CLASSROOMS = ['北久里浜', '久里浜'];
-  var CR_BG = {'北久里浜':'#f0f9ff', '久里浜':'#fff7ed'};
-  var CR_BORDER = {'北久里浜':'#bae6fd', '久里浜':'#fed7aa'};
-  var CR_COLOR = {'北久里浜':'#0369a1', '久里浜':'#c2410c'};
-
-  // 外側flexコンテナ
-  var flexWrap = document.createElement('div');
-  flexWrap.style.cssText = 'display:flex;gap:10px;margin-top:6px;';
-  wrap.appendChild(flexWrap);
-
-  CLASSROOMS.forEach(function(cr) {
-    // セクションヘッダー
-    var secDiv = document.createElement('div');
-    secDiv.style.cssText = 'flex:1;min-width:0;border:1.5px solid '+CR_BORDER[cr]+';border-radius:8px;padding:8px 10px;background:'+CR_BG[cr]+';';
-    var secLabel = document.createElement('div');
-    secLabel.style.cssText = 'font-size:11px;font-weight:700;color:'+CR_COLOR[cr]+';margin-bottom:8px;';
-    secLabel.textContent = '【' + cr + '】';
-    secDiv.appendChild(secLabel);
-
-    // 各コマ定義を教室ごとのIDで生成
-    var crKey = cr === '北久里浜' ? 'kita' : 'kuri';
-
-    // --- 英検対策 ---
-    var eikenId = 'sat_eiken_' + crKey;
-    var eikenEx = (komas||[]).find(function(k){ return k.id === eikenId || (k.satType==='eiken' && k.classroom===cr); });
-    // 旧形式互換：classroom未設定のeikenは北久里浜セクションに表示
-    if(!eikenEx && cr === '北久里浜'){
-      eikenEx = (komas||[]).find(function(k){ return k.satType==='eiken' && !k.classroom; });
-    }
-    var eikenRow = document.createElement('div');
-    eikenRow.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:4px;';
-    var eikenCb = document.createElement('input');
-    eikenCb.type='checkbox'; eikenCb.id='satKoma_eiken_'+crKey; eikenCb.className='koma-opt-cb'; eikenCb.checked=!!eikenEx;
-    eikenCb.dataset.cr = cr; eikenCb.dataset.satType = 'eiken'; eikenCb.dataset.time = '16:20〜17:10';
-    var eikenLbl = document.createElement('label');
-    eikenLbl.htmlFor='satKoma_eiken_'+crKey; eikenLbl.className='koma-opt-label';
-    eikenLbl.textContent = '英検対策 16:20〜17:10';
-    eikenRow.appendChild(eikenCb); eikenRow.appendChild(eikenLbl);
-    secDiv.appendChild(eikenRow);
-
-    // --- 土曜演習グループ ---
-    var grpLabel = document.createElement('div');
-    grpLabel.style.cssText = 'font-size:10px;color:#64748b;margin:6px 0 4px;font-weight:600;';
-    grpLabel.textContent = '土曜演習（①②・平日演習回のいずれか1つ）';
-    secDiv.appendChild(grpLabel);
-    var grpRow = document.createElement('div');
-    grpRow.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:4px;';
-
-    // 土曜演習①
-    var sat1Id = 'satKoma_sat1_' + crKey;
-    var sat1Ex = (komas||[]).find(function(k){ return k.id === 'sat_sat1_'+crKey || (k.satType==='sat' && k.time==='17:15〜18:35' && k.classroom===cr); });
-    var sat1Cb = document.createElement('input');
-    sat1Cb.type='checkbox'; sat1Cb.id=sat1Id; sat1Cb.className='koma-opt-cb'; sat1Cb.checked=!!sat1Ex;
-    sat1Cb.dataset.cr = cr; sat1Cb.dataset.satType = 'sat'; sat1Cb.dataset.time = '17:15〜18:35';
-    var sat1Lbl = document.createElement('label');
-    sat1Lbl.htmlFor=sat1Id; sat1Lbl.className='koma-opt-label';
-    sat1Lbl.textContent = '土曜演習① 17:15〜18:35';
-    grpRow.appendChild(sat1Cb); grpRow.appendChild(sat1Lbl);
-
-    // 土曜演習②
-    var sat2Id = 'satKoma_sat2_' + crKey;
-    var sat2Ex = (komas||[]).find(function(k){ return k.id === 'sat_sat2_'+crKey || (k.satType==='sat' && k.time==='18:40〜20:00' && k.classroom===cr); });
-    var sat2Cb = document.createElement('input');
-    sat2Cb.type='checkbox'; sat2Cb.id=sat2Id; sat2Cb.className='koma-opt-cb'; sat2Cb.checked=!!sat2Ex;
-    sat2Cb.dataset.cr = cr; sat2Cb.dataset.satType = 'sat'; sat2Cb.dataset.time = '18:40〜20:00';
-    var sat2Lbl = document.createElement('label');
-    sat2Lbl.htmlFor=sat2Id; sat2Lbl.className='koma-opt-label';
-    sat2Lbl.textContent = '土曜演習② 18:40〜20:00';
-    grpRow.appendChild(sat2Cb); grpRow.appendChild(sat2Lbl);
-
-    // 平日演習回
-    var hiraId = 'satKoma_hira_' + crKey;
-    var hiraEx = (komas||[]).find(function(k){ return k.satType==='hira' && k.classroom===cr; });
-    // 旧形式互換：classroomなしのhiraで所属教室が一致するもの
-    if(!hiraEx) hiraEx = (komas||[]).find(function(k){ return k.satType==='hira' && !k.classroom; });
-    var hiraCb = document.createElement('input');
-    hiraCb.type='checkbox'; hiraCb.id=hiraId; hiraCb.className='koma-opt-cb'; hiraCb.checked=!!hiraEx;
-    hiraCb.dataset.cr = cr; hiraCb.dataset.satType = 'hira';
-    var hiraLbl = document.createElement('label');
-    hiraLbl.htmlFor=hiraId; hiraLbl.className='koma-opt-label';
-    hiraLbl.textContent = '平日演習回';
-    grpRow.appendChild(hiraCb); grpRow.appendChild(hiraLbl);
-
-    // 平日演習回プルダウン（教室+曜日+時刻）
-    var hiraSel = document.createElement('select');
-    hiraSel.id = 'satHiraKoma_' + crKey;
-    var hiraVal = hiraEx ? (hiraEx.hiraKoma || '') : '';
-    // 旧形式互換：「曜日時刻」形式を「教室_曜日時刻」形式に補完
-    if(hiraVal && hiraVal.indexOf('_') === -1){
-      hiraVal = cr + '_' + hiraVal;
-    }
-    hiraSel.style.cssText = 'display:'+(hiraEx?'inline-flex':'none')+';font-size:11px;padding:3px 6px;border:1.5px solid var(--crimson);border-radius:6px;color:var(--crimson-dark);background:white;';
-    var hiraOpt = '<option value="">教室・曜日・時刻を選択</option>';
-    // 全教室の平日コマをリスト
-    ['北久里浜','久里浜'].forEach(function(c){
-      var clsDefs = (typeof KOMA_DEF !== 'undefined' && KOMA_DEF[c]) ? KOMA_DEF[c] : [];
-      clsDefs.forEach(function(kd){
-        if(['月','火','水','木','金'].indexOf(kd.youbi) !== -1){
-          var val = c + '_' + kd.youbi + kd.time;
-          var label = c + ' ' + kd.youbi + '曜 ' + kd.time;
-          hiraOpt += '<option value="'+val+'"'+(hiraVal===val?' selected':'')+'>'+label+'</option>';
-        }
-      });
-    });
-    hiraSel.innerHTML = hiraOpt;
-    hiraCb.addEventListener('change', function(){
-      hiraSel.style.display = hiraCb.checked ? 'inline-flex' : 'none';
-      if(!hiraCb.checked) hiraSel.value = '';
-    });
-    grpRow.appendChild(hiraSel);
-    secDiv.appendChild(grpRow);
-
-    // --- 受験特訓 ---
-    var jukenId = 'satKoma_juken_' + crKey;
-    var jukenEx = (komas||[]).find(function(k){ return k.satType==='juken' && k.classroom===cr; });
-    // 旧形式互換
-    if(!jukenEx) jukenEx = (komas||[]).find(function(k){ return k.satType==='juken' && !k.classroom; });
-    var jukenRow = document.createElement('div');
-    jukenRow.style.cssText = 'display:flex;align-items:center;gap:6px;';
-    var jukenCb = document.createElement('input');
-    jukenCb.type='checkbox'; jukenCb.id=jukenId; jukenCb.className='koma-opt-cb'; jukenCb.checked=!!jukenEx;
-    jukenCb.dataset.cr = cr; jukenCb.dataset.satType = 'juken'; jukenCb.dataset.time = '19:00〜21:30';
-    var jukenLbl = document.createElement('label');
-    jukenLbl.htmlFor=jukenId; jukenLbl.className='koma-opt-label';
-    jukenLbl.textContent = '受験特訓 19:00〜21:30';
-    jukenRow.appendChild(jukenCb); jukenRow.appendChild(jukenLbl);
-    secDiv.appendChild(jukenRow);
-
-    flexWrap.appendChild(secDiv);
-  });
-}
-
-// 土曜コマのUI状態をkomasエントリとして取得
-function getSatKomasFromUI(){
-  var results = [];
-  var CRS = [['北久里浜','kita'],['久里浜','kuri']];
-  var SAT_TYPES = [
-    {key:'eiken',  satType:'eiken', time:'16:20〜17:10'},
-    {key:'sat1',   satType:'sat',   time:'17:15〜18:35'},
-    {key:'sat2',   satType:'sat',   time:'18:40〜20:00'},
-    {key:'hira',   satType:'hira',  time:''},
-    {key:'juken',  satType:'juken', time:'19:00〜21:30'}
-  ];
-  CRS.forEach(function(crPair){
-    var cr = crPair[0];
-    var crKey = crPair[1];
-    SAT_TYPES.forEach(function(def){
-      var cbId = 'satKoma_' + def.key + '_' + crKey;
-      var cb = document.getElementById(cbId);
-      if(!cb || !cb.checked) return;
-      var entry = {
-        id: def.satType + '_' + def.key + '_' + crKey,
-        satType: def.satType,
-        time: def.time,
-        youbi: '土'
-      };
-      // 平日演習回：選択したコマ情報を付加（hiraKoma = 教室_曜日時刻）
-      if(def.satType === 'hira'){
-        var sel = document.getElementById('satHiraKoma_' + crKey);
-        entry.hiraKoma = sel ? sel.value : '';
-        // hiraKomaから時刻を取得（例: 北久里浜_月17:15〜18:35）
-        if(entry.hiraKoma){
-          var parts = entry.hiraKoma.split('_');
-          if(parts.length >= 2){
-            entry.time = parts[1].replace(/^[月火水木金土日]/, '');
-          }
-        }
-      }
-      // jukenは教室横断のためclassroomを付けない
-      // eiken/sat/hiraは所属教室固定（UIのセクション=教室）
-      if(def.satType !== 'juken'){
-        entry.classroom = cr;
-      }
-      results.push(entry);
-    });
-  });
-  return results;
-}
-
-// 任意のwrapId内の土曜コマチェックボックスからkomasエントリを取得（入会ポップアップ等で使用）
-function getSatKomasFromWrapId(wrapId){
-  var wrap = document.getElementById(wrapId);
-  if(!wrap) return [];
-  var results = [];
-  var CRS = [['北久里浜','kita'],['久里浜','kuri']];
-  var SAT_TYPES = [
-    {key:'eiken',  satType:'eiken', time:'16:20〜17:10'},
-    {key:'sat1',   satType:'sat',   time:'17:15〜18:35'},
-    {key:'sat2',   satType:'sat',   time:'18:40〜20:00'},
-    {key:'hira',   satType:'hira',  time:''},
-    {key:'juken',  satType:'juken', time:'19:00〜21:30'}
-  ];
-  CRS.forEach(function(crPair){
-    var cr = crPair[0], crKey = crPair[1];
-    SAT_TYPES.forEach(function(def){
-      var cb = wrap.querySelector('#satKoma_' + def.key + '_' + crKey);
-      if(!cb || !cb.checked) return;
-      var entry = { id: def.satType+'_'+def.key+'_'+crKey, satType: def.satType, time: def.time, youbi: '土' };
-      if(def.satType === 'hira'){
-        var sel = wrap.querySelector('#satHiraKoma_' + crKey);
-        entry.hiraKoma = sel ? sel.value : '';
-        if(entry.hiraKoma){
-          var parts = entry.hiraKoma.split('_');
-          if(parts.length >= 2) entry.time = parts[1].replace(/^[月火水木金土日]/, '');
-        }
-      }
-      if(def.satType !== 'juken') entry.classroom = cr;
-      results.push(entry);
-    });
-  });
-  return results;
-}
+// 【廃止済み 2026-06-13】平日振替（satType:'hira'）・土曜演習（satType:'sat'）は演習回（enshuu）に1本化（v2.22）。2026-11-08 本番の在籍・退会113人で0件を確かめて古い分岐を消した（_作り方標準 決まりの核10）
+// 土曜コマの別画面（renderSatKomaUI・getSatKomasFromUI・getSatKomasFromWrapId）も、どこからも呼ばれていなかったので消した
 
 // ===== マスタ取得 =====
 function getClassrooms(){ return loadMaster(KEY_CLS, DEFAULT_CLS); }
@@ -7421,7 +7176,7 @@ function buildKomaSummary(m){
     parts.push('CA '+ca.map(function(k){ return k.youbi+(k.time?k.time.split('〜')[0]:''); }).join('・'));
   }
   // 土曜授業・演習回（satTypeで識別）
-  var satLabels = {eiken:'英検対策', enshuu:'演習回', sat:'土曜演習', hira:'平日演習回', juken:'受験特訓'};
+  var satLabels = {eiken:'英検対策', enshuu:'演習回', juken:'受験特訓'};
   var satKomas = komas.filter(function(k){ return k.satType; });
   satKomas.forEach(function(k){
     var lbl = satLabels[k.satType] || k.satType;
@@ -7442,7 +7197,7 @@ function buildBulkCardKomaBadges(m){
   ensureBulkFilter();
   var komas = m.komas || [];
   var html = '';
-  var satLabels = {eiken:'英検対策', enshuu:'演習回', sat:'土曜演習', hira:'平日演習回', juken:'受験特訓'};
+  var satLabels = {eiken:'英検対策', enshuu:'演習回', juken:'受験特訓'};
 
   komas.forEach(function(k){
     var t = k.time ? k.time.split('〜')[0] : '';
@@ -7543,7 +7298,6 @@ function getBulkFiltered(){
         if(opts.indexOf('online')>=0 && k.online)                match=true;
         if(opts.indexOf('eiken')>=0  && k.satType==='eiken')     match=true;
         if(opts.indexOf('enshuu')>=0 && k.satType==='enshuu')    match=true;
-        if(opts.indexOf('sat')>=0    && k.satType==='sat')        match=true;  // 旧形式互換
         if(opts.indexOf('juken')>=0  && k.satType==='juken')      match=true;
       });
       if(!match) return false;
