@@ -739,6 +739,56 @@ body { font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; ba
 .help-btn:hover .help-tip{display:block;}
 </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+/* 2026-11-09（川上さん確定）会員管理GAS URL の見張りの帯。
+   この端末に保存されている会員管理GAS URL が「もう使えない古いURL」「中継（動くが遅い）」なら、画面の下に帯を出す。
+   会員管理から名簿を読めなかったときも帯を出す（URLがまた変わったとき、黙って止まらないように）。
+   公開ページなので URL そのものは書かない。URL の中の ID（AKfycb…）の SHA-256 だけで比べる。
+   古いURLが増えたらここの OLD に足す。一覧の正本＝ツール\_作り方標準\GAS_URLの参照先一覧.md */
+(function(){
+  var OLD = {
+    '7f789d6cfdb2e562cab4c4b52166a635b4b659a1337854aff5a015cc5d1c7c21': 'dead', // 旧デプロイB（2026-09-19 アーカイブ済み・404）
+    '44fc25eeb658f72907f3018561f1462ac269e205605b05792b9be460cb7a6bb5': 'slow'  // 会員管理中継（2026-11-09 から使わない。動くが1回あたり約1秒遅い）
+  };
+  var WHERE = "左の「設定」→「会員管理 GAS URL」";
+  var getUrl = function(){ try { return localStorage.getItem('sm_gas_url'); } catch(e){ return ''; } };
+  var state = { kind: '', lastUrl: null, closed: false };
+  function sha(s){
+    return crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)).then(function(b){
+      return Array.prototype.map.call(new Uint8Array(b), function(x){ return ('0'+x.toString(16)).slice(-2); }).join('');
+    });
+  }
+  function show(kind){
+    state.kind = kind;
+    var el = document.getElementById('kfKanriUrlBar');
+    if(!kind || state.closed){ if(el) el.remove(); return; }
+    if(!el){ el = document.createElement('div'); el.id = 'kfKanriUrlBar'; document.body.appendChild(el); }
+    var red = (kind !== 'slow');
+    el.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:2147483000;padding:10px 44px 10px 16px;font-size:14px;line-height:1.6;font-family:inherit;box-shadow:0 -2px 8px rgba(0,0,0,.15);'
+      + (red ? 'background:#fef2f2;border-top:3px solid #dc2626;color:#991b1b;' : 'background:#fefce8;border-top:3px solid #ca8a04;color:#854d0e;');
+    var msg = kind === 'dead' ? '<b>⚠ この端末の会員管理GAS URL は、もう使えない古いURLです。</b>生徒名簿が読めません。'
+            : kind === 'slow' ? '<b>この端末の会員管理GAS URL は、古い設定（中継）のままです。</b>動きますが、読み込みが遅くなります。'
+            : '<b>⚠ 会員管理から生徒名簿を読めませんでした。</b>会員管理GAS URL が古いか、まちがっている可能性があります。';
+    el.innerHTML = msg + '<br>' + WHERE + ' を、新しいURLに入れ直してください（URLは川上さんに聞いてください）。'
+      + '<button type="button" aria-label="閉じる" style="position:absolute;top:6px;right:10px;border:none;background:none;font-size:20px;cursor:pointer;color:inherit;" title="閉じる（次に開いたときにまた出ます）">×</button>';
+    el.querySelector('button').onclick = function(){ state.closed = true; el.remove(); };
+  }
+  function check(){
+    var url = String(getUrl() || '');
+    if(url === state.lastUrl) return;
+    state.lastUrl = url;
+    var m = url.match(/AKfycb[A-Za-z0-9_-]+/);
+    if(!m || !(window.crypto && crypto.subtle)){ if(state.kind !== 'fail') show(''); return; }
+    sha(m[0]).then(function(h){ if(OLD[h]) show(OLD[h]); else if(state.kind !== 'fail') show(''); });
+  }
+  window.kfKanriUrlGuard = {
+    fail: function(){ show('fail'); },
+    ok:   function(){ if(state.kind === 'fail'){ state.lastUrl = null; show(''); check(); } }
+  };
+  document.addEventListener('DOMContentLoaded', check);
+  setInterval(check, 3000); // 設定を貼り替えたら帯が消える
+})();
+</script>
 </head>
 <body>
 <div class="app-layout">
